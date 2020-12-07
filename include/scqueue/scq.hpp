@@ -11,13 +11,27 @@ template <typename T, std::size_t O = 15>
 class ring {
   using pointer = T*;
 public:
+  /**
+   * Attempts to enqueue an element in the ring buffer's tail position.
+   *
+   * @tparam finalize defaults to false, if true full buffers are finalized,
+   *   thereby preventing all further enqueue attempts
+   *
+   * @param elem the element to be enqueued
+   * @param ignore_empty TODO
+   * @param ignore_full if true, the function returns false if the ring is full,
+   *   otherwise, the function becomes blocking and loops until an element can
+   *   be enqueued
+   * @return true upon success, false otherwise
+   */
   template <bool finalize = false>
   bool try_enqueue(
       pointer elem,
-      bool non_empty = false,
-      bool non_full = true
+      bool ignore_empty = false,
+      bool ignore_full = false
   ) noexcept {
-    if (!non_full) {
+    // if
+    if (!ignore_full) {
       const auto tail = this->m_tail.load(SEQ_CST);
       if (tail >= N + this->m_head.load(SEQ_CST)) {
         return false;
@@ -26,15 +40,14 @@ public:
 
     while (true) {
       const auto tail = this->m_tail.fetch_add(1, ACQ_REL);
-
       if constexpr (finalize) {
         if ((tail & FINALIZE_BIT) == FINALIZE_BIT) {
-          // TODO: place entry back into fq
+          return false;
         }
       }
 
       const auto tail_cycle = cycle_t{ tail & ~(N - 1) };
-      const auto tail_idx = ring_map(tail);
+      const auto tail_idx = cache_remap(tail);
       auto pair = this->m_array[tail_idx].load(ACQUIRE);
 
       while (true) {
@@ -52,17 +65,19 @@ public:
             continue;
           }
 
-          if (!non_empty && this->m_threshold.load(SEQ_CST) != THRESHOLD) {
+          if (!ignore_empty && this->m_threshold.load(SEQ_CST) != THRESHOLD) {
             this->m_threshold.store(THRESHOLD, RELEASE);
           }
 
           return true;
         }
 
-        if (!non_full) {
+        this->m_threshold.store(THRESHOLD, RELEASE);
+
+        if (!ignore_full) {
           if (tail + 1 >= N + this->m_head.load(SEQ_CST)) {
             if constexpr (finalize) {
-              this->m_tail.fetch_or(FINALIZE_BIT, std::memory_order_release);
+              this->m_tail.fetch_or(FINALIZE_BIT, RELEASE);
             }
 
             return false;
@@ -82,7 +97,7 @@ public:
     while (true) {
       const auto head = this->m_head.fetch_add(1, ACQ_REL);
       const auto head_cycle = cycle_t{ head & ~(N - 1) };
-      const auto head_idx = ring_map(head);
+      const auto head_idx = cache_remap(head);
       auto tag = this->m_array[head_idx].tag.load(ACQUIRE);
 
       cycle_t enq_cycle;
@@ -141,7 +156,7 @@ private:
   static constexpr auto ACQ_REL = std::memory_order_acq_rel;
   static constexpr auto SEQ_CST = std::memory_order_seq_cst;
 
-  static constexpr size_t ring_map(uint64_t idx) {
+  static constexpr size_t cache_remap(uint64_t idx) {
     return ((idx & (N - 1)) >> (O + 1 - RING_MIN_PTR)) | ((idx << RING_MIN_PTR) & (N - 1));
   }
 
