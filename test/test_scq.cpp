@@ -3,7 +3,7 @@
 #include <thread>
 #include <vector>
 
-#include "scq/scq.hpp"
+#include "scqueue/scq.hpp"
 
 int main() {
   const auto thread_count = 8;
@@ -40,7 +40,7 @@ int main() {
       while (!start.load());
 
       for (auto op = 0; op < count; ++op) {
-        queue.enqueue(&thread_elements[thread][op]);
+        queue.try_enqueue(&thread_elements[thread][op]);
       }
     });
 
@@ -53,7 +53,7 @@ int main() {
 
       while (deq_count < count) {
         int* deq = nullptr;
-        const auto res = queue.dequeue(deq);
+        const auto res = queue.try_dequeue(deq);
         if (res) {
           thread_sum += *deq;
           deq_count += 1;
@@ -71,7 +71,7 @@ int main() {
   }
 
   int* deq = nullptr;
-  if (queue.dequeue(deq)) {
+  if (queue.try_dequeue(deq)) {
     std::cerr << "queue not empty after count * threads dequeue operations" << std::endl;
     return 1;
   }

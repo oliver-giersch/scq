@@ -11,7 +11,12 @@ template <typename T, std::size_t O = 15>
 class ring {
   using pointer = T*;
 public:
-  bool enqueue(pointer elem, bool non_empty = false, bool non_full = true) noexcept {
+  template <bool finalize = false>
+  bool try_enqueue(
+      pointer elem,
+      bool non_empty = false,
+      bool non_full = true
+  ) noexcept {
     if (!non_full) {
       const auto tail = this->m_tail.load(SEQ_CST);
       if (tail >= N + this->m_head.load(SEQ_CST)) {
@@ -21,6 +26,13 @@ public:
 
     while (true) {
       const auto tail = this->m_tail.fetch_add(1, ACQ_REL);
+
+      if constexpr (finalize) {
+        if ((tail & FINALIZE_BIT) == FINALIZE_BIT) {
+          // TODO: place entry back into fq
+        }
+      }
+
       const auto tail_cycle = cycle_t{ tail & ~(N - 1) };
       const auto tail_idx = ring_map(tail);
       auto pair = this->m_array[tail_idx].load(ACQUIRE);
@@ -49,6 +61,10 @@ public:
 
         if (!non_full) {
           if (tail + 1 >= N + this->m_head.load(SEQ_CST)) {
+            if constexpr (finalize) {
+              this->m_tail.fetch_or(FINALIZE_BIT, std::memory_order_release);
+            }
+
             return false;
           }
         }
@@ -58,7 +74,7 @@ public:
     }
   }
 
-  bool dequeue(pointer& result, bool non_empty = false) noexcept {
+  bool try_dequeue(pointer& result, bool non_empty = false) noexcept {
     if (!non_empty && this->m_threshold.load(SEQ_CST) < 0) {
       return false;
     }
@@ -112,6 +128,8 @@ private:
   static constexpr std::size_t N = std::size_t{ 1 } << (O + 1);
   static constexpr std::size_t RING_MIN_PTR = 3;
   static constexpr int64_t     THRESHOLD = 2 * int64_t{ N } - 1;
+
+  static constexpr uint64_t    FINALIZE_BIT = uint64_t{ 1 } << uint64_t{ 63 };
 
   using atomic_pair_t = detail::atomic_pair_t<T>;
   using cycle_t       = detail::cycle_t;

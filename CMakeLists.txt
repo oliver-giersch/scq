@@ -3,8 +3,8 @@ project(scq)
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_library(scq INTERFACE)
-target_include_directories(scq INTERFACE include/)
+add_library(scqueue INTERFACE)
+target_include_directories(scqueue INTERFACE include/)
 
 find_package(Threads REQUIRED)
 
