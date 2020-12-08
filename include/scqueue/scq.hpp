@@ -11,6 +11,16 @@ template <typename T, std::size_t O = 15>
 class ring {
   using pointer = T*;
 public:
+  ring() noexcept = default;
+  explicit ring(pointer first) noexcept {
+    const auto idx = cache_remap(N);
+
+    this->m_tail.store(N + 1, RELAXED);
+    this->m_array[idx].tag.store(N | uint64_t{ 0x1 }, RELAXED);
+    this->m_array[idx].ptr.store(first, RELAXED);
+    this->m_threshold.store(THRESHOLD, RELAXED);
+  }
+
   /**
    * Attempts to enqueue an element in the ring buffer's tail position.
    *
@@ -155,6 +165,7 @@ private:
   using pair_t        = detail::pair_t<T>;
   using pair_array_t  = std::array<atomic_pair_t, N>;
 
+  static constexpr auto RELAXED = std::memory_order_relaxed;
   static constexpr auto ACQUIRE = std::memory_order_acquire;
   static constexpr auto RELEASE = std::memory_order_release;
   static constexpr auto ACQ_REL = std::memory_order_acq_rel;
