@@ -153,6 +153,10 @@ public:
     }
   }
 
+  void reset_threshold(std::memory_order order) {
+    this->m_threshold.store(THRESHOLD, order);
+  }
+
 private:
   static constexpr std::size_t N = std::size_t{ 1 } << (O + 1);
   static constexpr std::size_t RING_MIN_PTR = 3;
