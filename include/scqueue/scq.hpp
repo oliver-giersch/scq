@@ -30,34 +30,38 @@ public:
       bool ignore_empty = false,
       bool ignore_full = false
   ) noexcept {
-    // if
     if (!ignore_full) {
-      const auto tail = this->m_tail.load(SEQ_CST);
-      if (tail >= N + this->m_head.load(SEQ_CST)) {
+      // check if the queue is empty
+      const auto tail = this->m_tail.load(ACQUIRE);
+      if (tail >= N + this->m_head.load(ACQUIRE)) {
         return false;
       }
     }
 
     while (true) {
+      // increment tail index
       const auto tail = this->m_tail.fetch_add(1, ACQ_REL);
       if constexpr (finalize) {
+        // if the ring is finalized, return false
         if ((tail & FINALIZE_BIT) == FINALIZE_BIT) {
           return false;
         }
       }
 
+      // calculate cycle for tail index
       const auto tail_cycle = cycle_t{ tail & ~(N - 1) };
+      // calculate remapped index for avoiding false sharing
       const auto tail_idx = cache_remap(tail);
+      // read the pair at the (remapped) buffer index
       auto pair = this->m_array[tail_idx].load(ACQUIRE);
 
       while (true) {
-        const auto tag = pair.tag;
-        const auto enq_cycle = cycle_t{ tag & ~(N - 1) };
-
+        // calculate cycle of the read tuple value
+        const auto enq_cycle = cycle_t{ pair.tag & ~(N - 1) };
         if (
             enq_cycle < tail_cycle &&
-            (tag == enq_cycle.val ||
-             (tag == (enq_cycle.val | uint64_t{ 0x2 }) &&
+            (pair.tag == enq_cycle.val ||
+             (pair.tag == (enq_cycle.val | uint64_t{ 0x2 }) &&
              this->m_head.load(ACQUIRE) <= tail))
         ) {
           const auto desired = pair_t{ tail_cycle.val | uint64_t{ 0x1 }, elem };
