@@ -55,7 +55,11 @@ struct alignas(16) atomic_pair_t {
   }
 
   pair_t<T> fetch_and(pair_t<T> pair, std::memory_order order) {
-    auto curr = this->load(std::memory_order_relaxed);
+    auto curr = pair_t {
+      this->tag.load(std::memory_order_relaxed),
+      this->ptr.load(std::memory_order_relaxed)
+    };
+
     while (true) {
       const auto next = pair_t {
           curr.tag & pair.tag,
@@ -66,13 +70,6 @@ struct alignas(16) atomic_pair_t {
         return curr;
       }
     }
-  }
-
-private:
-  pair_t<T> load(std::memory_order order) {
-    auto expected = pair_t<T> { 0, nullptr };
-    this->compare_exchange_weak(expected, expected, std::memory_order_relaxed, std::memory_order_relaxed);
-    return expected;
   }
 };
 }
