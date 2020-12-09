@@ -29,29 +29,44 @@ struct pair_t {
 };
 
 template <typename T>
-struct atomic_pair_t {
+struct alignas(16) atomic_pair_t {
   using pointer = T*;
 
   std::atomic<uint64_t> tag{ 0 };
   std::atomic<pointer>  ptr{ nullptr };
 
   pair_t<T> load(std::memory_order order) {
-    auto atomic = reinterpret_cast<std::atomic<pair_t<T>>*>(this);
-    return atomic->load(order);
+    //auto atomic = reinterpret_cast<std::atomic<pair_t<T>>*>(this);
+    //return atomic->load(order);
+
+    auto expected = pair_t<T> { 0, nullptr };
+    this->compare_exchange_weak(expected, expected, std::memory_order_relaxed, std::memory_order_relaxed);
+    return expected;
   }
 
   bool compare_exchange_weak(
-      pair_t<T>&  expected,
-      pair_t<T>   desired,
+      pair_t<T>& expected,
+      pair_t<T>  desired,
       std::memory_order success,
       std::memory_order failure
   ) {
-    auto atomic = reinterpret_cast<std::atomic<pair_t<T>>*>(this);
-    return atomic->compare_exchange_weak(expected, desired, success, failure);
+    (void) success;
+    (void) failure;
+    uint8_t res;
+    asm volatile(
+      "lock cmpxchg16b %0"
+      : "+m"(*this), "=@ccz"(res), "+a"(expected.tag), "+d"(expected.ptr) // input ops
+      : "b"(desired.tag), "c"(desired.ptr)                                // output ops
+      : "memory"                                                          // clobbers
+    );
+
+    return res != 0;
+
+    /*auto atomic = reinterpret_cast<std::atomic<pair_t<T>>*>(this);
+    return atomic->compare_exchange_weak(expected, desired, success, failure);*/
   }
 
   pair_t<T> fetch_and(pair_t<T> pair, std::memory_order order) {
-    auto atomic = reinterpret_cast<std::atomic<pair_t<T>>*>(this);
     auto curr = this->load(std::memory_order_relaxed);
     while (true) {
       const auto next = pair_t {
@@ -59,7 +74,7 @@ struct atomic_pair_t {
           reinterpret_cast<pointer>((reinterpret_cast<size_t>(curr.ptr) & reinterpret_cast<size_t>(pair.ptr)))
       };
 
-      if (atomic->compare_exchange_weak(curr, next, order, std::memory_order_relaxed)) {
+      if (this->compare_exchange_weak(curr, next, order, std::memory_order_relaxed)) {
         return curr;
       }
     }

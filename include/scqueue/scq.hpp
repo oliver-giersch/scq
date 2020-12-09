@@ -63,15 +63,18 @@ public:
       // calculate remapped index for avoiding false sharing
       const auto tail_idx = cache_remap(tail);
       // read the pair at the (remapped) buffer index
-      auto pair = this->m_array[tail_idx].load(ACQUIRE);
+      auto pair = pair_t {
+        this->m_array[tail_idx].tag.load(ACQUIRE),
+        this->m_array[tail_idx].ptr.load(ACQUIRE)
+      };
 
       while (true) {
         // calculate cycle of the read tuple value
-        const auto enq_cycle = cycle_t{ pair.tag & ~(N - 1) };
+        const auto cycle = cycle_t{ pair.tag & ~(N - 1) };
         if (
-            enq_cycle < tail_cycle &&
-            (pair.tag == enq_cycle.val ||
-             (pair.tag == (enq_cycle.val | uint64_t{ 0x2 }) &&
+            cycle < tail_cycle &&
+            (pair.tag == cycle.val ||
+             (pair.tag == (cycle.val | uint64_t{ 0x2 }) &&
              this->m_head.load(ACQUIRE) <= tail))
         ) {
           const auto desired = pair_t{ tail_cycle.val | uint64_t{ 0x1 }, elem };
@@ -79,17 +82,17 @@ public:
             continue;
           }
 
-          if (!ignore_empty && this->m_threshold.load(SEQ_CST) != THRESHOLD) {
+          if (!ignore_empty && this->m_threshold.load(RELAXED) != THRESHOLD) {
             this->m_threshold.store(THRESHOLD, RELEASE);
           }
 
           return true;
         }
 
-        this->m_threshold.store(THRESHOLD, RELEASE);
+        this->m_threshold.store(THRESHOLD, SEQ_CST);
 
         if (!ignore_full) {
-          if (tail + 1 >= N + this->m_head.load(SEQ_CST)) {
+          if (tail + 1 >= N + this->m_head.load(RELAXED)) {
             if constexpr (finalize) {
               this->m_tail.fetch_or(FINALIZE_BIT, RELEASE);
             }
@@ -104,7 +107,7 @@ public:
   }
 
   bool try_dequeue(pointer& result, bool non_empty = false) noexcept {
-    if (!non_empty && this->m_threshold.load(SEQ_CST) < 0) {
+    if (!non_empty && this->m_threshold.load(ACQUIRE) < 0) {
       return false;
     }
 
