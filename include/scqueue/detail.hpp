@@ -35,15 +35,6 @@ struct alignas(16) atomic_pair_t {
   std::atomic<uint64_t> tag{ 0 };
   std::atomic<pointer>  ptr{ nullptr };
 
-  pair_t<T> load(std::memory_order order) {
-    //auto atomic = reinterpret_cast<std::atomic<pair_t<T>>*>(this);
-    //return atomic->load(order);
-
-    auto expected = pair_t<T> { 0, nullptr };
-    this->compare_exchange_weak(expected, expected, std::memory_order_relaxed, std::memory_order_relaxed);
-    return expected;
-  }
-
   bool compare_exchange_weak(
       pair_t<T>& expected,
       pair_t<T>  desired,
@@ -61,9 +52,6 @@ struct alignas(16) atomic_pair_t {
     );
 
     return res != 0;
-
-    /*auto atomic = reinterpret_cast<std::atomic<pair_t<T>>*>(this);
-    return atomic->compare_exchange_weak(expected, desired, success, failure);*/
   }
 
   pair_t<T> fetch_and(pair_t<T> pair, std::memory_order order) {
@@ -78,6 +66,13 @@ struct alignas(16) atomic_pair_t {
         return curr;
       }
     }
+  }
+
+private:
+  pair_t<T> load(std::memory_order order) {
+    auto expected = pair_t<T> { 0, nullptr };
+    this->compare_exchange_weak(expected, expected, std::memory_order_relaxed, std::memory_order_relaxed);
+    return expected;
   }
 };
 }
