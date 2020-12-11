@@ -27,12 +27,7 @@ int main() {
   std::atomic_bool start{ false };
   std::atomic_uint64_t sum{ 0 };
 
-  scq::ring<int> queue{};
-
-  if (decltype(queue)::CAPACITY < thread_count * count) {
-    std::cerr << "queue has to little capacity" << std::endl;
-    return 1;
-  }
+  scq::ring_t<int> queue{};
 
   for (auto thread = 0; thread < thread_count; ++thread) {
     // producer thread

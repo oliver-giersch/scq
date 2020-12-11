@@ -4,201 +4,165 @@
 #include <atomic>
 #include <array>
 
-#include "detail.hpp"
+#include "scq_fwd.hpp"
 
 namespace scq {
-template <typename T, std::size_t O = 15>
-class ring {
-  using pointer = T*;
-public:
-  ring() noexcept = default;
-  explicit ring(pointer first) noexcept {
-    const auto idx = cache_remap(N);
-
-    this->m_tail.store(N + 1, RELAXED);
-    this->m_array[idx].tag.store(N | uint64_t{ 0x1 }, RELAXED);
-    this->m_array[idx].ptr.store(first, RELAXED);
-    this->m_threshold.store(THRESHOLD, RELAXED);
+template<typename T, std::size_t O>
+ring_t<T, O>::ring_t(pointer first) {
+  if (first == nullptr) {
+    throw std::invalid_argument("elem must not be null");
   }
 
-  /**
-   * Attempts to enqueue an element in the ring buffer's tail position.
-   *
-   * @tparam finalize defaults to false, if true full buffers are finalized,
-   *   thereby preventing all further enqueue attempts
-   *
-   * @param elem the element to be enqueued
-   * @param ignore_empty TODO
-   * @param ignore_full if true, the function returns false if the ring is full,
-   *   otherwise, the function becomes blocking and loops until an element can
-   *   be enqueued
-   * @return true upon success, false otherwise
-   */
-  template <bool finalize = false>
-  bool try_enqueue(
-      pointer elem,
-      bool ignore_empty = false,
-      bool ignore_full = false
-  ) noexcept {
-    if (!ignore_full) {
-      // check if the queue is empty
-      const auto tail = this->m_tail.load(ACQUIRE);
-      if (tail >= N + this->m_head.load(ACQUIRE)) {
+  const auto idx = cache_remap(N);
+  this->m_tail.store(N + 1, relaxed);
+  this->m_array[idx].tag.store(N | uint64_t{ 0x1 }, relaxed);
+  this->m_array[idx].ptr.store(first, relaxed);
+  this->reset_threshold(relaxed);
+}
+
+template<typename T, std::size_t O>
+template<bool finalize>
+bool ring_t<T, O>::try_enqueue(pointer elem, bool ignore_empty, bool ignore_full) {
+  if (elem == nullptr) {
+    throw std::invalid_argument("elem must not be null");
+  }
+
+  if (!ignore_full) {
+    // check if the queue is empty
+    const auto tail = this->m_tail.load(acquire);
+    if (tail >= N + this->m_head.load(acquire)) {
+      return false;
+    }
+  }
+
+  while (true) {
+    // increment tail index
+    const auto tail = this->m_tail.fetch_add(1, acq_rel);
+    if constexpr (finalize) {
+      // if the ring is finalized, return false
+      if ((tail & FINALIZE_BIT) == FINALIZE_BIT) {
         return false;
       }
     }
 
-    while (true) {
-      // increment tail index
-      const auto tail = this->m_tail.fetch_add(1, ACQ_REL);
-      if constexpr (finalize) {
-        // if the ring is finalized, return false
-        if ((tail & FINALIZE_BIT) == FINALIZE_BIT) {
-          return false;
-        }
-      }
-
-      // calculate cycle for tail index
-      const auto tail_cycle = cycle_t{ tail & ~(N - 1) };
-      // calculate remapped index for avoiding false sharing
-      const auto tail_idx = cache_remap(tail);
-      // read the pair at the (remapped) buffer index
-      auto pair = pair_t {
-        this->m_array[tail_idx].tag.load(ACQUIRE),
-        this->m_array[tail_idx].ptr.load(ACQUIRE)
-      };
-
-      while (true) {
-        // calculate cycle of the read tuple value
-        const auto cycle = cycle_t{ pair.tag & ~(N - 1) };
-        if (
-            cycle < tail_cycle &&
-            (pair.tag == cycle.val ||
-             (pair.tag == (cycle.val | uint64_t{ 0x2 }) &&
-             this->m_head.load(ACQUIRE) <= tail))
-        ) {
-          const auto desired = pair_t{ tail_cycle.val | uint64_t{ 0x1 }, elem };
-          if (!this->m_array[tail_idx].compare_exchange_weak(pair, desired, ACQ_REL, ACQUIRE)) {
-            continue;
-          }
-
-          if (!ignore_empty && this->m_threshold.load(RELAXED) != THRESHOLD) {
-            this->m_threshold.store(THRESHOLD, RELEASE);
-          }
-
-          return true;
-        }
-
-        this->m_threshold.store(THRESHOLD, SEQ_CST);
-
-        if (!ignore_full) {
-          if (tail + 1 >= N + this->m_head.load(RELAXED)) {
-            if constexpr (finalize) {
-              this->m_tail.fetch_or(FINALIZE_BIT, RELEASE);
-            }
-
-            return false;
-          }
-        }
-
-        break;
-      }
-    }
-  }
-
-  bool try_dequeue(pointer& result, bool non_empty = false) noexcept {
-    if (!non_empty && this->m_threshold.load(ACQUIRE) < 0) {
-      return false;
-    }
+    // calculate cycle for tail index
+    const auto tail_cycle = cycle_t{ tail & ~(N - 1) };
+    // calculate remapped index for avoiding false sharing
+    const auto tail_idx = cache_remap(tail);
+    // read the pair at the (remapped) buffer index
+    auto pair = pair_t{
+        this->m_array[tail_idx].tag.load(acquire),
+        this->m_array[tail_idx].ptr.load(acquire)
+    };
 
     while (true) {
-      const auto head = this->m_head.fetch_add(1, ACQ_REL);
-      const auto head_cycle = cycle_t{ head & ~(N - 1) };
-      const auto head_idx = cache_remap(head);
-      auto tag = this->m_array[head_idx].tag.load(ACQUIRE);
-
-      cycle_t enq_cycle;
-      uint64_t tag_new;
-
-      do {
-        enq_cycle = cycle_t{ tag & ~(N - 1) };
-        if (enq_cycle.val == head_cycle.val) {
-          auto pair = this->m_array[head_idx].fetch_and(pair_t { ~uint64_t{ 0x1 }, nullptr }, ACQ_REL);
-          result = pair.ptr;
-          return true;
+      // calculate cycle of the read tuple value
+      const auto cycle = cycle_t{ pair.tag & ~(N - 1) };
+      if (
+          cycle < tail_cycle
+          && (
+              pair.tag == cycle.val
+              || (
+                  pair.tag == (cycle.val | uint64_t{ 0x2 })
+                  && this->m_head.load(acquire) <= tail
+              )
+          )
+      ) {
+        const auto desired = pair_t{ tail_cycle.val | uint64_t{ 0x1 }, elem };
+        if (!this->m_array[tail_idx].compare_exchange_weak(pair, desired, acq_rel, acquire)) {
+          continue;
         }
 
-        if ((tag & ~uint64_t{ 0x2 }) != enq_cycle.val) {
-          tag_new = tag | uint64_t{ 0x2 };
-          if (tag == tag_new) {
-            break;
+        if (!ignore_empty && this->m_threshold.load(relaxed) != THRESHOLD) {
+          this->reset_threshold(release);
+        }
+
+        return true;
+      }
+
+      this->reset_threshold(seq_cst);
+
+      if (!ignore_full) {
+        if (tail + 1 >= N + this->m_head.load(relaxed)) {
+          if constexpr (finalize) {
+            this->m_tail.fetch_or(FINALIZE_BIT, release);
           }
-        } else {
-          tag_new = head_cycle.val | (tag & 0x2);
-        }
-      } while (
-          enq_cycle < head_cycle &&
-          !this->m_array[head_idx].tag.compare_exchange_weak(tag, tag_new, ACQ_REL, ACQUIRE)
-      );
 
-      if (!non_empty) {
-        const auto tail = cycle_t{ this->m_tail.load(ACQUIRE) };
-        if (tail <= cycle_t { head + 1 }) {
-          this->catchup(tail.val, head + 1);
-          this->m_threshold.fetch_sub(1, ACQ_REL);
-          return false;
-        }
-
-        if (this->m_threshold.fetch_sub(1, ACQ_REL) <= 0) {
           return false;
         }
       }
+
+      break;
     }
   }
+}
 
-  void reset_threshold(std::memory_order order) {
-    this->m_threshold.store(THRESHOLD, order);
+template<typename T, std::size_t O>
+bool ring_t<T, O>::try_dequeue(pointer& result, bool non_empty) noexcept {
+  if (!non_empty && this->m_threshold.load(acquire) < 0) {
+    return false;
   }
 
-private:
-  static constexpr std::size_t N = std::size_t{ 1 } << (O + 1);
-  static constexpr std::size_t RING_MIN_PTR = 3;
-  static constexpr int64_t     THRESHOLD = 2 * int64_t{ N } - 1;
+  while (true) {
+    const auto head = this->m_head.fetch_add(1, acq_rel);
+    const auto head_cycle = cycle_t{ head & ~(N - 1) };
+    const auto head_idx = cache_remap(head);
+    auto tag = this->m_array[head_idx].tag.load(acquire);
 
-  static constexpr uint64_t    FINALIZE_BIT = uint64_t{ 1 } << uint64_t{ 63 };
+    cycle_t enq_cycle;
+    uint64_t tag_new;
 
-  using atomic_pair_t = detail::atomic_pair_t<T>;
-  using cycle_t       = detail::cycle_t;
-  using pair_t        = detail::pair_t<T>;
-  using pair_array_t  = std::array<atomic_pair_t, N>;
+    do {
+      enq_cycle = cycle_t{ tag & ~(N - 1) };
+      if (enq_cycle.val == head_cycle.val) {
+        auto pair = this->m_array[head_idx].fetch_and(pair_t{ ~uint64_t{ 0x1 }, nullptr }, acq_rel);
+        result = pair.ptr;
+        return true;
+      }
 
-  static constexpr auto RELAXED = std::memory_order_relaxed;
-  static constexpr auto ACQUIRE = std::memory_order_acquire;
-  static constexpr auto RELEASE = std::memory_order_release;
-  static constexpr auto ACQ_REL = std::memory_order_acq_rel;
-  static constexpr auto SEQ_CST = std::memory_order_seq_cst;
+      if ((tag & ~uint64_t{ 0x2 }) != enq_cycle.val) {
+        tag_new = tag | uint64_t{ 0x2 };
+        if (tag == tag_new) {
+          break;
+        }
+      } else {
+        tag_new = head_cycle.val | (tag & 0x2);
+      }
+    } while (
+        enq_cycle < head_cycle &&
+        !this->m_array[head_idx].tag.compare_exchange_weak(tag, tag_new, acq_rel, acquire)
+        );
 
-  static constexpr size_t cache_remap(uint64_t idx) {
-    return ((idx & (N - 1)) >> (O + 1 - RING_MIN_PTR)) | ((idx << RING_MIN_PTR) & (N - 1));
-  }
+    if (!non_empty) {
+      const auto tail = cycle_t{ this->m_tail.load(acquire) };
+      if (tail <= cycle_t{ head + 1 }) {
+        this->catchup(tail.val, head + 1);
+        this->m_threshold.fetch_sub(1, acq_rel);
+        return false;
+      }
 
-  void catchup(uint64_t tail, uint64_t head) {
-    while (!this->m_tail.compare_exchange_weak(tail, head, ACQ_REL, ACQUIRE)) {
-      head = this->m_head.load(SEQ_CST);
-      tail = this->m_tail.load(SEQ_CST);
-      if (cycle_t { tail } >= cycle_t { head }) {
-        break;
+      if (this->m_threshold.fetch_sub(1, acq_rel) <= 0) {
+        return false;
       }
     }
   }
+}
 
-  alignas(128) std::atomic<uint64_t> m_head{ N };
-  alignas(128) std::atomic<int64_t>  m_threshold{ -1 };
-  alignas(128) std::atomic<uint64_t> m_tail{ N };
-  alignas(128) pair_array_t          m_array{ };
-public:
-  static constexpr std::size_t CAPACITY = N;
-};
+template<typename T, std::size_t O>
+void ring_t<T, O>::reset_threshold(std::memory_order order) {
+  this->m_threshold.store(THRESHOLD, order);
+}
+
+template<typename T, std::size_t O>
+void ring_t<T, O>::catchup(uint64_t tail, uint64_t head) noexcept {
+  while (!this->m_tail.compare_exchange_weak(tail, head, acq_rel, acquire)) {
+    head = this->m_head.load(acquire);
+    tail = this->m_tail.load(acquire);
+    if (cycle_t{ tail } >= cycle_t{ head }) {
+      break;
+    }
+  }
+}
 }
 
 #endif /* SCQ_HPP */
