@@ -9,10 +9,12 @@
 namespace scq {
 template<typename T, std::size_t O = 15>
 class ring_t {
-  static constexpr std::size_t N = std::size_t{ 1 } << (O + 1);
-  static constexpr std::size_t RING_MIN_PTR = 3;
-  static constexpr uint64_t    FINALIZE_BIT = uint64_t{ 1 } << uint64_t{ 63 };
-  static constexpr int64_t     THRESHOLD = 2 * int64_t{ N } - 1;
+  static constexpr auto N            = std::size_t{ 1 } << (O + 1);
+  static constexpr auto RING_MIN_PTR = std::size_t{ 3 };
+  static constexpr auto ENQUEUE_BIT  = uint64_t{ 0x1 };
+  static constexpr auto DEQUEUE_BIT  = uint64_t{ 0x2 };
+  static constexpr auto FINALIZE_BIT = uint64_t{ 1 } << uint64_t{ 63 };
+  static constexpr auto THRESHOLD    = 2 * int64_t{ N } - 1;
 
   using atomic_pair_t = detail::atomic_pair_t<T>;
   using cycle_t       = detail::cycle_t;
@@ -32,16 +34,18 @@ class ring_t {
   void catchup(uint64_t tail, uint64_t head) noexcept;
 
   alignas(128) std::atomic<uint64_t> m_head{ N };
-  alignas(128) std::atomic<int64_t> m_threshold{ -1 };
+  alignas(128) std::atomic<int64_t>  m_threshold{ -1 };
   alignas(128) std::atomic<uint64_t> m_tail{ N };
-  alignas(128) pair_array_t m_array{};
+  alignas(128) pair_array_t          m_array{};
 
 public:
   using pointer = T*;
 
+  /** constructor */
   ring_t() noexcept = default;
   explicit ring_t(pointer first);
 
+  /** Returns the ring buffer's maximum capacity. */
   [[nodiscard]]
   constexpr std::size_t capacity() const noexcept {
     return N;
@@ -65,7 +69,19 @@ public:
    */
   template<bool finalize = false>
   bool try_enqueue(pointer elem, bool ignore_empty = false, bool ignore_full = false);
+
+  /**
+   * Attempts to dequeue an element from the ring buffer's head position.
+   *
+   * @param result the pointer where the dequeued element is written into on success
+   * @param non_empty if true, the procedure will ignore the possibility of the
+   *     queue ever being empty
+   *
+   * @return true upon success, false otherwise
+   */
   bool try_dequeue(pointer& result, bool non_empty = false) noexcept;
+
+  /** Resets the threshold. */
   void reset_threshold(std::memory_order order);
 };
 }

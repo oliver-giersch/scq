@@ -21,13 +21,14 @@ int main() {
     }
   }
 
-  std::vector<std::thread> threads{};
+  std::vector<std::thread> threads{ };
   threads.reserve(thread_count * 2);
 
   std::atomic_bool start{ false };
   std::atomic_uint64_t sum{ 0 };
 
   scq::ring_t<int> queue{};
+  static_assert(queue.capacity() == thread_count * count, "not enough capacity");
 
   for (auto thread = 0; thread < thread_count; ++thread) {
     // producer thread
@@ -41,10 +42,10 @@ int main() {
 
     // consumer thread
     threads.emplace_back([&] {
-      while (!start.load()) {}
+      uint64_t thread_sum = 0;
+      uint64_t deq_count = 0;
 
-      auto thread_sum = 0;
-      auto deq_count = 0;
+      while (!start.load()) {}
 
       while (deq_count < count) {
         int* deq = nullptr;

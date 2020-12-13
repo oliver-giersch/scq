@@ -15,7 +15,7 @@ ring_t<T, O>::ring_t(pointer first) {
 
   const auto idx = cache_remap(N);
   this->m_tail.store(N + 1, relaxed);
-  this->m_array[idx].tag.store(N | uint64_t{ 0x1 }, relaxed);
+  this->m_array[idx].tag.store(N | ENQUEUE_BIT, relaxed);
   this->m_array[idx].ptr.store(first, relaxed);
   this->reset_threshold(relaxed);
 }
@@ -63,12 +63,12 @@ bool ring_t<T, O>::try_enqueue(pointer elem, bool ignore_empty, bool ignore_full
           && (
               pair.tag == cycle.val
               || (
-                  pair.tag == (cycle.val | uint64_t{ 0x2 })
+                  pair.tag == (cycle.val | DEQUEUE_BIT)
                   && this->m_head.load(acquire) <= tail
               )
           )
       ) {
-        const auto desired = pair_t{ tail_cycle.val | uint64_t{ 0x1 }, elem };
+        const auto desired = pair_t{ tail_cycle.val | ENQUEUE_BIT, elem };
         if (!slot.compare_exchange_weak(pair, desired, acq_rel, acquire)) {
           continue;
         }
@@ -116,18 +116,18 @@ bool ring_t<T, O>::try_dequeue(pointer& result, bool non_empty) noexcept {
     do {
       enq_cycle = cycle_t{ tag & ~(N - 1) };
       if (enq_cycle.val == head_cycle.val) {
-        auto pair = slot.fetch_and(pair_t{ ~uint64_t{ 0x1 }, nullptr }, acq_rel);
+        auto pair = slot.fetch_and(pair_t{ ~ENQUEUE_BIT, nullptr }, acq_rel);
         result = pair.ptr;
         return true;
       }
 
       if ((tag & ~uint64_t{ 0x2 }) != enq_cycle.val) {
-        tag_new = tag | uint64_t{ 0x2 };
+        tag_new = tag | DEQUEUE_BIT;
         if (tag == tag_new) {
           break;
         }
       } else {
-        tag_new = head_cycle.val | (tag & 0x2);
+        tag_new = head_cycle.val | (tag & DEQUEUE_BIT);
       }
     } while (
         enq_cycle < head_cycle
