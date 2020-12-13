@@ -48,11 +48,11 @@ bool ring_t<T, O>::try_enqueue(pointer elem, bool ignore_empty, bool ignore_full
     // calculate cycle for tail index
     const auto tail_cycle = cycle_t{ tail & ~(N - 1) };
     // calculate remapped index for avoiding false sharing
-    const auto tail_idx = cache_remap(tail);
+    auto& slot = this->m_array[cache_remap(tail)];
     // read the pair at the (remapped) buffer index
     auto pair = pair_t{
-        this->m_array[tail_idx].tag.load(acquire),
-        this->m_array[tail_idx].ptr.load(acquire)
+        slot.tag.load(acquire),
+        slot.ptr.load(acquire)
     };
 
     while (true) {
@@ -69,7 +69,7 @@ bool ring_t<T, O>::try_enqueue(pointer elem, bool ignore_empty, bool ignore_full
           )
       ) {
         const auto desired = pair_t{ tail_cycle.val | uint64_t{ 0x1 }, elem };
-        if (!this->m_array[tail_idx].compare_exchange_weak(pair, desired, acq_rel, acquire)) {
+        if (!slot.compare_exchange_weak(pair, desired, acq_rel, acquire)) {
           continue;
         }
 
@@ -106,8 +106,9 @@ bool ring_t<T, O>::try_dequeue(pointer& result, bool non_empty) noexcept {
   while (true) {
     const auto head = this->m_head.fetch_add(1, acq_rel);
     const auto head_cycle = cycle_t{ head & ~(N - 1) };
-    const auto head_idx = cache_remap(head);
-    auto tag = this->m_array[head_idx].tag.load(acquire);
+
+    auto& slot = this->m_array[cache_remap(head)];
+    auto tag = slot.tag.load(acquire);
 
     cycle_t enq_cycle;
     uint64_t tag_new;
@@ -115,7 +116,7 @@ bool ring_t<T, O>::try_dequeue(pointer& result, bool non_empty) noexcept {
     do {
       enq_cycle = cycle_t{ tag & ~(N - 1) };
       if (enq_cycle.val == head_cycle.val) {
-        auto pair = this->m_array[head_idx].fetch_and(pair_t{ ~uint64_t{ 0x1 }, nullptr }, acq_rel);
+        auto pair = slot.fetch_and(pair_t{ ~uint64_t{ 0x1 }, nullptr }, acq_rel);
         result = pair.ptr;
         return true;
       }
@@ -129,9 +130,9 @@ bool ring_t<T, O>::try_dequeue(pointer& result, bool non_empty) noexcept {
         tag_new = head_cycle.val | (tag & 0x2);
       }
     } while (
-        enq_cycle < head_cycle &&
-        !this->m_array[head_idx].tag.compare_exchange_weak(tag, tag_new, acq_rel, acquire)
-        );
+        enq_cycle < head_cycle
+        && !slot.tag.compare_exchange_weak(tag, tag_new, acq_rel, acquire)
+    );
 
     if (!non_empty) {
       const auto tail = cycle_t{ this->m_tail.load(acquire) };
