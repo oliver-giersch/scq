@@ -51,8 +51,8 @@ bool ring_t<T, O>::try_enqueue(pointer elem, bool ignore_empty, bool ignore_full
     auto& slot = this->m_array[cache_remap(tail)];
     // read the pair at the (remapped) buffer index
     auto pair = pair_t{
-        slot.tag.load(acquire),
-        slot.ptr.load(acquire)
+        slot.tag.load(relaxed),
+        slot.ptr.load(relaxed)
     };
 
     while (true) {
