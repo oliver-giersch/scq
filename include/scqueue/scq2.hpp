@@ -4,11 +4,11 @@
 #include <atomic>
 #include <array>
 
-#include "scq_fwd.hpp"
+#include "scq2_fwd.hpp"
 
-namespace scq {
+namespace scq::cas2 {
 template<typename T, std::size_t O>
-ring_t<T, O>::ring_t(pointer first) {
+bounded_queue_t<T, O>::bounded_queue_t(pointer first) {
   if (first == nullptr) {
     throw std::invalid_argument("elem must not be null");
   }
@@ -22,7 +22,7 @@ ring_t<T, O>::ring_t(pointer first) {
 
 template<typename T, std::size_t O>
 template<bool finalize>
-bool ring_t<T, O>::try_enqueue(pointer elem, bool ignore_empty, bool ignore_full) {
+bool bounded_queue_t<T, O>::try_enqueue(pointer elem, bool ignore_empty, bool ignore_full) {
   if (elem == nullptr) {
     throw std::invalid_argument("elem must not be null");
   }
@@ -98,7 +98,7 @@ bool ring_t<T, O>::try_enqueue(pointer elem, bool ignore_empty, bool ignore_full
 }
 
 template<typename T, std::size_t O>
-bool ring_t<T, O>::try_dequeue(pointer& result, bool non_empty) noexcept {
+bool bounded_queue_t<T, O>::try_dequeue(pointer& result, bool non_empty) noexcept {
   if (!non_empty && this->m_threshold.load(acquire) < 0) {
     return false;
   }
@@ -150,12 +150,12 @@ bool ring_t<T, O>::try_dequeue(pointer& result, bool non_empty) noexcept {
 }
 
 template<typename T, std::size_t O>
-void ring_t<T, O>::reset_threshold(std::memory_order order) {
+void bounded_queue_t<T, O>::reset_threshold(std::memory_order order) {
   this->m_threshold.store(THRESHOLD, order);
 }
 
 template<typename T, std::size_t O>
-void ring_t<T, O>::catchup(uint64_t tail, uint64_t head) noexcept {
+void bounded_queue_t<T, O>::catchup(uint64_t tail, uint64_t head) noexcept {
   while (!this->m_tail.compare_exchange_weak(tail, head, acq_rel, acquire)) {
     head = this->m_head.load(acquire);
     tail = this->m_tail.load(acquire);

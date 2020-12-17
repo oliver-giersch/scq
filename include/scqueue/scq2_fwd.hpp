@@ -4,15 +4,14 @@
 #include <atomic>
 #include <array>
 
-#include "detail.hpp"
+#include "scqueue/detail/detail.hpp"
 
-namespace scq {
-template<typename T, std::size_t O = 15>
-class ring_t {
-  static constexpr auto N            = std::size_t{ 1 } << (O + 1);
-  static constexpr auto RING_MIN_PTR = std::size_t{ 3 };
-  static constexpr auto ENQUEUE_BIT  = uint64_t{ 0x1 };
-  static constexpr auto DEQUEUE_BIT  = uint64_t{ 0x2 };
+namespace scq::cas2 {
+template<typename T, std::size_t O = 16>
+class bounded_queue_t {
+  static constexpr auto N            = std::size_t{ 1 } << O;
+  static constexpr auto ENQUEUE_BIT  = uint64_t{ 0b01 };
+  static constexpr auto DEQUEUE_BIT  = uint64_t{ 0b10 };
   static constexpr auto FINALIZE_BIT = uint64_t{ 1 } << uint64_t{ 63 };
   static constexpr auto THRESHOLD    = 2 * int64_t{ N } - 1;
 
@@ -20,7 +19,7 @@ class ring_t {
   using cycle_t       = detail::cycle_t;
   using pair_t        = detail::pair_t<T>;
   using pair_array_t  = std::array<atomic_pair_t, N>;
-
+  /** memory ordering constants */
   static constexpr auto relaxed = std::memory_order_relaxed;
   static constexpr auto acquire = std::memory_order_acquire;
   static constexpr auto release = std::memory_order_release;
@@ -28,7 +27,7 @@ class ring_t {
   static constexpr auto seq_cst = std::memory_order_seq_cst;
 
   static constexpr size_t cache_remap(uint64_t idx) noexcept {
-    return ((idx & (N - 1)) >> (O + 1 - RING_MIN_PTR)) | ((idx << RING_MIN_PTR) & (N - 1));
+    return ((idx & (N - 1)) >> (O - 3)) | ((idx << 3) & (N - 1));
   }
 
   void catchup(uint64_t tail, uint64_t head) noexcept;
@@ -36,20 +35,16 @@ class ring_t {
   alignas(128) std::atomic<uint64_t> m_head{ N };
   alignas(128) std::atomic<int64_t>  m_threshold{ -1 };
   alignas(128) std::atomic<uint64_t> m_tail{ N };
-  alignas(128) pair_array_t          m_array{};
+  alignas(128) pair_array_t          m_array{ };
 
 public:
   using pointer = T*;
 
-  /** constructor */
-  ring_t() noexcept = default;
-  explicit ring_t(pointer first);
+  static constexpr auto CAPACITY = N;
 
-  /** Returns the ring buffer's maximum capacity. */
-  [[nodiscard]]
-  constexpr std::size_t capacity() const noexcept {
-    return N;
-  }
+  /** constructor */
+  bounded_queue_t() noexcept = default;
+  explicit bounded_queue_t(pointer first);
   /**
    * Attempts to enqueue an element in the ring buffer's tail position.
    *

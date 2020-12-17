@@ -2,38 +2,33 @@
 #define SCQ_DETAIL_HPP
 
 #include <atomic>
+#include <compare>
+
+#include <iostream>
 
 namespace scq::detail {
 struct cycle_t {
-  uint64_t val;
+  std::uintptr_t val;
 };
 
-bool constexpr operator<(const cycle_t& lhs, const cycle_t& rhs) {
-  return static_cast<int64_t>(lhs.val) - static_cast<int64_t>(rhs.val) < 0;
-}
-
-bool constexpr operator<=(const cycle_t& lhs, const cycle_t& rhs) {
-  return static_cast<int64_t>(lhs.val) - static_cast<int64_t>(rhs.val) <= 0;
-}
-
-bool constexpr operator>=(const cycle_t& lhs, const cycle_t& rhs) {
-  return static_cast<int64_t>(lhs.val) - static_cast<int64_t>(rhs.val) >= 0;
+constexpr auto operator<=>(const cycle_t& lhs, const cycle_t& rhs) {
+  return static_cast<std::intptr_t>(lhs.val) - static_cast<std::intptr_t>(rhs.val) <=> 0;
 }
 
 template <typename T>
 struct pair_t {
   using pointer = T*;
 
-  uint64_t tag;
-  pointer  ptr;
+  std::uintptr_t tag;
+  pointer        ptr;
 };
 
 template <typename T>
 struct alignas(16) atomic_pair_t {
   using pointer = T*;
 
-  std::atomic<uint64_t> tag{ 0 };
-  std::atomic<pointer>  ptr{ nullptr };
+  std::atomic<std::uintptr_t> tag{ 0 };
+  std::atomic<pointer>        ptr{ nullptr };
 
   bool compare_exchange_weak(
       pair_t<T>& expected,
@@ -63,7 +58,10 @@ struct alignas(16) atomic_pair_t {
     while (true) {
       const auto next = pair_t {
           curr.tag & pair.tag,
-          reinterpret_cast<pointer>((reinterpret_cast<size_t>(curr.ptr) & reinterpret_cast<size_t>(pair.ptr)))
+          reinterpret_cast<pointer>(
+              reinterpret_cast<std::uintptr_t>(curr.ptr)
+              & reinterpret_cast<std::uintptr_t>(pair.ptr)
+          )
       };
 
       if (this->compare_exchange_weak(curr, next, order, std::memory_order_relaxed)) {

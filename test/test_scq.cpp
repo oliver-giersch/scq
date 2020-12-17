@@ -1,11 +1,33 @@
 #include <atomic>
 #include <iostream>
+#include <stdexcept>
+#include <string_view>
 #include <thread>
 #include <vector>
 
-#include "scqueue/scq.hpp"
+#include "scqueue/scqd.hpp"
+#include "scqueue/scq2.hpp"
 
-int main() {
+template <typename Q>
+int test_queue();
+
+int main(int argc, const char* argv[]) {
+  if (argc < 2) {
+    throw std::invalid_argument("too few arguments");
+  }
+
+  const auto queue = std::string_view{ argv[1] };
+  if (queue == "scq2") {
+    return test_queue<scq::cas2::bounded_queue_t<int, 16>>();
+  } else if (queue == "scqd") {
+    return test_queue<scq::d::bounded_queue_t<int, 16>>();
+  }
+
+  throw std::invalid_argument("invalid queue argument");
+}
+
+template <typename Q>
+int test_queue() {
   const auto thread_count = 8;
   const auto count = 8192;
 
@@ -27,8 +49,8 @@ int main() {
   std::atomic_bool start{ false };
   std::atomic_uint64_t sum{ 0 };
 
-  scq::ring_t<int> queue{};
-  static_assert(queue.capacity() == thread_count * count, "not enough capacity");
+  Q queue{};
+  static_assert(Q::CAPACITY == thread_count * count, "not enough capacity");
 
   for (auto thread = 0; thread < thread_count; ++thread) {
     // producer thread
@@ -80,4 +102,5 @@ int main() {
   }
 
   std::cout << "test successful (sum = " << res << ")" << std::endl;
+  return 0;
 }
