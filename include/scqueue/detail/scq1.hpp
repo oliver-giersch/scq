@@ -9,24 +9,28 @@ using namespace std;
 
 namespace scq::cas1 {
 template <std::size_t O>
-bounded_index_queue_t<O>::bounded_index_queue_t() noexcept :
-  m_head{ 0 }, m_tail{ 0 }, m_threshold{ -1 }
+bounded_index_queue_t<O>::bounded_index_queue_t(
+    std::size_t deq_count,
+    std::size_t enq_count
+) :
+    m_head{ deq_count },
+    m_tail{ enq_count },
+    m_threshold{ (deq_count == 0 && enq_count == 0) ? -1 : THRESHOLD }
 {
-  for (auto& slot : this->m_slots) {
-    slot.store(EMPTY_SLOT, std::memory_order_relaxed);
+  if (deq_count > enq_count || enq_count > CAPACITY) [[unlikely]] {
+    throw std::invalid_argument("initial count must be less than capacity");
   }
-}
 
-template <std::size_t O>
-bounded_index_queue_t<O>::bounded_index_queue_t(detail::init_t init) noexcept :
-  m_head{ 0 }, m_tail( HALF ), m_threshold{ THRESHOLD }
-{
-  for (auto i = 1; i < HALF; ++i) {
+  for (auto i = 0; i < deq_count; ++i) {
+    this->m_slots[cache_remap(i)].store(2 * N - 1, relaxed);
+  }
+
+  for (auto i = deq_count; i < enq_count; ++i) {
     this->m_slots[cache_remap(i)].store(N + i, relaxed);
   }
 
-  for (auto i = HALF; i < CAPACITY; ++i) {
-    this->m_slots[cache_remap(i)].store(EMPTY_SLOT, relaxed);
+  for (auto i = enq_count; i < N; ++i) {
+    this->m_slots[cache_remap(i)].store(EMPTY, relaxed);
   }
 }
 
@@ -34,14 +38,14 @@ template <std::size_t O>
 template <bool finalize>
 bool bounded_index_queue_t<O>::try_enqueue(std::size_t idx, bool ignore_empty) {
   if (idx >= CAPACITY) [[unlikely]] {
-    throw std::invalid_argument("idx must be >= 0");
+    throw std::invalid_argument("idx must not be greater than capacity");
   }
 
   const auto enq_idx = static_cast<std::uintptr_t>(idx) ^ (N - 1);
   while (true) {
     const auto tail = this->m_tail.fetch_add(1, acq_rel);
     if constexpr (finalize) {
-      if ((tail & FINALIZE_BIT) == FINALIZE_BIT) [[unlikely]] {
+      if ((tail & FINALIZE) == FINALIZE) [[unlikely]] {
         return false;
       }
     }
@@ -139,7 +143,7 @@ bool bounded_index_queue_t<O>::try_dequeue(std::size_t& idx, bool ignore_empty) 
 
 template <std::size_t O>
 void bounded_index_queue_t<O>::finalize_queue() noexcept {
-  this->m_tail.fetch_or(FINALIZE_BIT, release);
+  this->m_tail.fetch_or(FINALIZE, release);
 }
 
 template <std::size_t O>

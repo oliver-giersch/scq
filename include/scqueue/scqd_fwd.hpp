@@ -10,22 +10,26 @@ namespace scq::d {
 template <typename T, std::size_t O = 15>
 class bounded_queue_t {
 public:
+  /** Type alias for element pointers. */
   using pointer = T*;
+  /** The queue's capacity. */
+  static constexpr auto CAPACITY = std::size_t{ 1 } << O;
 private:
-  static constexpr auto N = std::size_t{ 1 } << O;
-
+  /** Internal type aliases. */
   using index_queue_t = ::scq::cas1::bounded_index_queue_t<O>;
-  using init_t        = ::scq::cas1::detail::init_t;
-  using slot_array_t  = std::array<pointer, N>;
-
+  using slot_array_t  = std::array<pointer, CAPACITY>;
+  /** The queue for storing the indices of enqueued pointers. */
   index_queue_t m_aq;
+  /** The array storing the actual pointers. */
   slot_array_t  m_slots{};
+  /** The queue for storing all available indices. */
   index_queue_t m_fq;
 
 public:
-  static constexpr auto CAPACITY = N;
-
+  /** constructors */
   bounded_queue_t() noexcept;
+  explicit bounded_queue_t(pointer first);
+  /** destructor */
   ~bounded_queue_t() = default;
 
   /** Attempts to enqueue an element at the end of the queue. */

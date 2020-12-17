@@ -9,17 +9,15 @@
 #include "scqueue/detail/detail.hpp"
 
 namespace scq::cas1 {
-namespace detail {
-  enum class init_t { PRE_FILLED };
-}
-
 template <std::size_t O = 15>
 class bounded_index_queue_t {
-  static constexpr auto HALF         = std::size_t{ 1 } << O;
-  static constexpr auto N            = 2 * HALF;
-  static constexpr auto FINALIZE_BIT = std::uintptr_t{ 1 } << (std::numeric_limits<uintptr_t>::digits - 1);
-  static constexpr auto THRESHOLD    = 3 * std::intptr_t{ N } - 1;
-  static constexpr auto EMPTY_SLOT   = std::numeric_limits<std::uintptr_t>::max();
+  static_assert(O >= 2, "order must be greater than 2");
+  static constexpr auto HALF      = std::size_t{ 1 } << O;
+  static constexpr auto N         = 2 * HALF;
+  static constexpr auto THRESHOLD = 3 * std::intptr_t{ N } - 1;
+  static constexpr auto EMPTY     = std::numeric_limits<std::uintptr_t>::max();
+  static constexpr auto FINALIZE  =
+      std::uintptr_t{ 1 } << (std::numeric_limits<std::uintptr_t>::digits - 1);
   /** type aliases */
   using cycle_t = scq::detail::cycle_t;
   using slot_array_t = std::array<std::atomic_uintptr_t, N>;
@@ -43,14 +41,18 @@ class bounded_index_queue_t {
 public:
   static constexpr auto CAPACITY = HALF;
 
-  bounded_index_queue_t() noexcept;
-  explicit bounded_index_queue_t(detail::init_t init) noexcept;
+  /** constructor */
+  explicit bounded_index_queue_t(std::size_t deq_count = 0, std::size_t enq_count = CAPACITY);
   ~bounded_index_queue_t() = default;
 
+  /** Attempts to enqueue the given index at the queue's back. */
   template <bool finalize = false>
   bool try_enqueue(std::size_t idx, bool ignore_empty = false);
+  /** Attempts to dequeue the index at the queue's front. */
   bool try_dequeue(std::size_t& idx, bool ignore_empty = false) noexcept;
+  /** Finalizes the queue, closing it for further enqueues. */
   void finalize_queue() noexcept;
+  /** Resets the threshold value. */
   void reset_threshold(std::memory_order order) noexcept;
 };
 }
