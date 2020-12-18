@@ -1,5 +1,5 @@
-#ifndef SCQ_HPP
-#define SCQ_HPP
+#ifndef SCQ2_HPP
+#define SCQ2_HPP
 
 #include <atomic>
 #include <array>
@@ -111,7 +111,7 @@ bool bounded_queue_t<T, O>::try_dequeue(pointer& result, bool non_empty) noexcep
     auto tag = slot.tag.load(acquire);
 
     cycle_t enq_cycle;
-    uint64_t tag_new;
+    std::uintmax_t tag_new;
 
     do {
       enq_cycle = cycle_t{ tag & ~(N - 1) };
@@ -121,7 +121,7 @@ bool bounded_queue_t<T, O>::try_dequeue(pointer& result, bool non_empty) noexcep
         return true;
       }
 
-      if ((tag & ~uint64_t{ 0x2 }) != enq_cycle.val) {
+      if ((tag & ~DEQUEUE_BIT) != enq_cycle.val) {
         tag_new = tag | DEQUEUE_BIT;
         if (tag == tag_new) {
           break;
@@ -155,7 +155,7 @@ void bounded_queue_t<T, O>::reset_threshold(std::memory_order order) {
 }
 
 template<typename T, std::size_t O>
-void bounded_queue_t<T, O>::catchup(uint64_t tail, uint64_t head) noexcept {
+void bounded_queue_t<T, O>::catchup(std::uintmax_t tail, std::uintmax_t head) noexcept {
   while (!this->m_tail.compare_exchange_weak(tail, head, acq_rel, acquire)) {
     head = this->m_head.load(acquire);
     tail = this->m_tail.load(acquire);
@@ -166,4 +166,4 @@ void bounded_queue_t<T, O>::catchup(uint64_t tail, uint64_t head) noexcept {
 }
 }
 
-#endif /* SCQ_HPP */
+#endif /* SCQ2_HPP */

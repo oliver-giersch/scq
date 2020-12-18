@@ -9,7 +9,7 @@
 #include "scqueue/detail/detail.hpp"
 
 namespace scq::cas1 {
-template <std::size_t O = 15>
+template <std::size_t O = 16>
 class bounded_index_queue_t {
   static_assert(O >= 2, "order must be greater than 2");
   /** constructor argument type */

@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include <array>
+#include <limits>
 
 #include "scqueue/detail/detail.hpp"
 
@@ -10,11 +11,12 @@ namespace scq::cas2 {
 template<typename T, std::size_t O = 16>
 class bounded_queue_t {
   static constexpr auto N            = std::size_t{ 1 } << O;
-  static constexpr auto ENQUEUE_BIT  = uint64_t{ 0b01 };
-  static constexpr auto DEQUEUE_BIT  = uint64_t{ 0b10 };
-  static constexpr auto FINALIZE_BIT = uint64_t{ 1 } << uint64_t{ 63 };
-  static constexpr auto THRESHOLD    = 2 * int64_t{ N } - 1;
-
+  static constexpr auto ENQUEUE_BIT  = std::uintmax_t{ 0b01 };
+  static constexpr auto DEQUEUE_BIT  = std::uintmax_t{ 0b10 };
+  static constexpr auto THRESHOLD    = 2 * std::intmax_t{ N } - 1;
+  static constexpr auto FINALIZE_BIT =
+      std::uintmax_t{ 1 } << (std::numeric_limits<std::uintmax_t>::digits - 1);
+    /** type aliases */
   using atomic_pair_t = detail::atomic_pair_t<T>;
   using cycle_t       = detail::cycle_t;
   using pair_t        = detail::pair_t<T>;
@@ -26,25 +28,25 @@ class bounded_queue_t {
   static constexpr auto acq_rel = std::memory_order_acq_rel;
   static constexpr auto seq_cst = std::memory_order_seq_cst;
 
-  static constexpr size_t cache_remap(uint64_t idx) noexcept {
-    return ((idx & (N - 1)) >> (O - 3)) | ((idx << 3) & (N - 1));
+  static constexpr std::size_t cache_remap(std::size_t idx) noexcept {
+    return ((idx % N) >> (O - 3)) | ((idx << 3) % N);
   }
 
-  void catchup(uint64_t tail, uint64_t head) noexcept;
+  void catchup(std::uintmax_t tail, std::uintmax_t head) noexcept;
 
-  alignas(128) std::atomic<uint64_t> m_head{ N };
-  alignas(128) std::atomic<int64_t>  m_threshold{ -1 };
-  alignas(128) std::atomic<uint64_t> m_tail{ N };
+  alignas(128) std::atomic_uintmax_t m_head{ N };
+  alignas(128) std::atomic_intmax_t  m_threshold{ -1 };
+  alignas(128) std::atomic_uintmax_t m_tail{ N };
   alignas(128) pair_array_t          m_array{ };
 
 public:
   using pointer = T*;
-
   static constexpr auto CAPACITY = N;
 
   /** constructor */
   bounded_queue_t() noexcept = default;
   explicit bounded_queue_t(pointer first);
+
   /**
    * Attempts to enqueue an element in the ring buffer's tail position.
    *

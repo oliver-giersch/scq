@@ -7,7 +7,7 @@
 #include <scqueue/detail/scq1_fwd.hpp>
 
 namespace scq::d {
-template <typename T, std::size_t O = 15>
+template <typename T, std::size_t O = 16>
 class bounded_queue_t {
 public:
   using pointer = T*;

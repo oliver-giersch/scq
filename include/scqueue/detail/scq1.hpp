@@ -68,8 +68,8 @@ bool bounded_index_queue_t<O>::try_enqueue(std::size_t idx, bool ignore_empty) {
           continue;
         }
 
-        if (!ignore_empty && (this->m_threshold.load() != THRESHOLD)) {
-          this->m_threshold.store(THRESHOLD);
+        if (!ignore_empty && (this->m_threshold.load(acquire) != THRESHOLD)) {
+          this->reset_threshold(release);
         }
 
         return true;
