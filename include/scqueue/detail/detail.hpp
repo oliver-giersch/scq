@@ -8,18 +8,18 @@
 
 namespace scq::detail {
 struct cycle_t {
-  std::uintptr_t val;
+  std::uintmax_t val;
 };
 
 constexpr auto operator<=>(const cycle_t& lhs, const cycle_t& rhs) {
-  return static_cast<std::intptr_t>(lhs.val) - static_cast<std::intptr_t>(rhs.val) <=> 0;
+  return static_cast<std::intmax_t>(lhs.val) - static_cast<std::intmax_t>(rhs.val) <=> 0;
 }
 
 template <typename T>
 struct pair_t {
   using pointer = T*;
 
-  std::uintptr_t tag;
+  std::uintmax_t tag;
   pointer        ptr;
 };
 
@@ -27,7 +27,7 @@ template <typename T>
 struct alignas(16) atomic_pair_t {
   using pointer = T*;
 
-  std::atomic<std::uintptr_t> tag{ 0 };
+  std::atomic<std::uintmax_t> tag{ 0 };
   std::atomic<pointer>        ptr{ nullptr };
 
   bool compare_exchange_weak(
@@ -59,8 +59,8 @@ struct alignas(16) atomic_pair_t {
       const auto next = pair_t {
           curr.tag & pair.tag,
           reinterpret_cast<pointer>(
-              reinterpret_cast<std::uintptr_t>(curr.ptr)
-              & reinterpret_cast<std::uintptr_t>(pair.ptr)
+              reinterpret_cast<std::uintmax_t>(curr.ptr)
+              & reinterpret_cast<std::uintmax_t>(pair.ptr)
           )
       };
 

@@ -22,13 +22,13 @@ class bounded_index_queue_t {
   /** size and bit constants */
   static constexpr auto HALF       = std::size_t{ 1 } << O;
   static constexpr auto N          = 2 * HALF;
-  static constexpr auto THRESHOLD  = 3 * std::intptr_t{ N } - 1;
-  static constexpr auto EMPTY_SLOT = std::numeric_limits<std::uintptr_t>::max();
+  static constexpr auto THRESHOLD  = 3 * std::intmax_t{ N } - 1;
+  static constexpr auto EMPTY_SLOT = std::numeric_limits<std::uintmax_t>::max();
   static constexpr auto FINALIZE   =
-      std::uintptr_t{ 1 } << (std::numeric_limits<std::uintptr_t>::digits - 1);
+      std::uintmax_t{ 1 } << (std::numeric_limits<std::uintmax_t>::digits - 1);
   /** type aliases */
   using cycle_t = scq::detail::cycle_t;
-  using slot_array_t = std::array<std::atomic_uintptr_t, N>;
+  using slot_array_t = std::array<std::atomic_uintmax_t, N>;
   /** memory ordering constants */
   static constexpr auto relaxed = std::memory_order_relaxed;
   static constexpr auto acquire = std::memory_order_acquire;
@@ -39,11 +39,11 @@ class bounded_index_queue_t {
     return ((idx % N) >> (O - 3)) | ((idx << 4) % N);
   }
 
-  void catchup(std::uintptr_t tail, std::uintptr_t head) noexcept;
+  void catchup(std::uintmax_t tail, std::uintmax_t head) noexcept;
 
-  alignas(128) std::atomic_uintptr_t m_head;
-  alignas(128) std::atomic_uintptr_t m_tail;
-  alignas(128) std::atomic_intptr_t  m_threshold;
+  alignas(128) std::atomic_uintmax_t m_head;
+  alignas(128) std::atomic_uintmax_t m_tail;
+  alignas(128) std::atomic_intmax_t  m_threshold;
   alignas(128) slot_array_t          m_slots{ };
 
 public:

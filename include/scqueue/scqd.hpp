@@ -47,7 +47,7 @@ bool bounded_queue_t<T, O>::try_enqueue(pointer elem, bool ignore_empty) {
 
 template <typename T, std::size_t O>
 bool bounded_queue_t<T, O>::try_dequeue(pointer& result, bool ignore_empty) {
-  std::uintptr_t idx;
+  std::uintmax_t idx;
   if (!this->m_aq.try_dequeue(idx)) {
     return false;
   }

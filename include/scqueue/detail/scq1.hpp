@@ -39,7 +39,7 @@ bool bounded_index_queue_t<O>::try_enqueue(std::size_t idx, bool ignore_empty) {
     throw std::invalid_argument("idx must not be greater than capacity");
   }
 
-  const auto enq_idx = static_cast<std::uintptr_t>(idx) ^ (N - 1);
+  const auto enq_idx = static_cast<std::uintmax_t>(idx) ^ (N - 1);
   while (true) {
     const auto tail = this->m_tail.fetch_add(1, acq_rel);
     if constexpr (finalize) {
@@ -91,12 +91,12 @@ bool bounded_index_queue_t<O>::try_dequeue(std::size_t& idx, bool ignore_empty) 
     const auto head_cycle = cycle_t{ (head << 1) | (2 * N - 1) };
     auto& slot = this->m_slots[cache_remap(head)];
 
-    std::uintptr_t entry;
+    std::uintmax_t entry;
     auto attempt = 0;
 
     retry:
     entry = slot.load(acquire);
-    uintptr_t entry_new;
+    uintmax_t entry_new;
     cycle_t entry_cycle;
 
     do {
