@@ -37,7 +37,7 @@ bool bounded_queue_t<T, O>::try_enqueue(pointer elem, bool ignore_empty) {
   const auto res = this->m_aq.template try_enqueue<finalize>(idx);
   if constexpr (finalize) {
     if (!res) {
-      this->m_fq.enqueue(idx, false);
+      (void) this->m_fq.try_enqueue(idx, false);
       return false;
     }
   }
