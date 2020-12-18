@@ -9,14 +9,12 @@ using namespace std;
 
 namespace scq::cas1 {
 template <std::size_t O>
-bounded_index_queue_t<O>::bounded_index_queue_t(
-    std::size_t deq_count,
-    std::size_t enq_count
-) :
-    m_head{ deq_count },
-    m_tail{ enq_count },
-    m_threshold{ (deq_count == 0 && enq_count == 0) ? -1 : THRESHOLD }
+bounded_index_queue_t<O>::bounded_index_queue_t(queue_init_t init) :
+    m_head{ init.deq_count },
+    m_tail{ init.enq_count },
+    m_threshold{ init.is_empty() ? -1 : THRESHOLD }
 {
+  const auto [deq_count, enq_count] = init;
   if (deq_count > enq_count || enq_count > CAPACITY) [[unlikely]] {
     throw std::invalid_argument("initial count must be less than capacity");
   }
@@ -30,7 +28,7 @@ bounded_index_queue_t<O>::bounded_index_queue_t(
   }
 
   for (auto i = enq_count; i < N; ++i) {
-    this->m_slots[cache_remap(i)].store(EMPTY, relaxed);
+    this->m_slots[cache_remap(i)].store(EMPTY_SLOT, relaxed);
   }
 }
 

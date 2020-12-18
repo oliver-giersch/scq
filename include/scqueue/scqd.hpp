@@ -6,10 +6,13 @@
 
 namespace scq::d {
 template <typename T, std::size_t O>
-bounded_queue_t<T, O>::bounded_queue_t() noexcept : m_aq{ 0, 0 }, m_fq{ } {}
+bounded_queue_t<T, O>::bounded_queue_t() noexcept :
+  m_aq{ index_queue_t::EMPTY }, m_fq{ index_queue_t::FILLED } {}
 
 template <typename T, std::size_t O>
-bounded_queue_t<T, O>::bounded_queue_t(pointer first) : m_aq{ 0, 1 }, m_fq{ 1, CAPACITY } {
+bounded_queue_t<T, O>::bounded_queue_t(pointer first) :
+  m_aq{{ 0, 1 }}, m_fq{{ 1, CAPACITY }}
+{
   if (first == nullptr) [[unlikely]] {
     throw std::invalid_argument("pointer `first` must not be null");
   }

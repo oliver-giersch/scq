@@ -12,11 +12,19 @@ namespace scq::cas1 {
 template <std::size_t O = 15>
 class bounded_index_queue_t {
   static_assert(O >= 2, "order must be greater than 2");
-  static constexpr auto HALF      = std::size_t{ 1 } << O;
-  static constexpr auto N         = 2 * HALF;
-  static constexpr auto THRESHOLD = 3 * std::intptr_t{ N } - 1;
-  static constexpr auto EMPTY     = std::numeric_limits<std::uintptr_t>::max();
-  static constexpr auto FINALIZE  =
+  /** constructor argument type */
+  struct queue_init_t {
+    std::size_t deq_count, enq_count;
+    [[nodiscard]] bool is_empty() const {
+      return this->deq_count == 0 && this->enq_count == 0;
+    }
+  };
+  /** size and bit constants */
+  static constexpr auto HALF       = std::size_t{ 1 } << O;
+  static constexpr auto N          = 2 * HALF;
+  static constexpr auto THRESHOLD  = 3 * std::intptr_t{ N } - 1;
+  static constexpr auto EMPTY_SLOT = std::numeric_limits<std::uintptr_t>::max();
+  static constexpr auto FINALIZE   =
       std::uintptr_t{ 1 } << (std::numeric_limits<std::uintptr_t>::digits - 1);
   /** type aliases */
   using cycle_t = scq::detail::cycle_t;
@@ -39,10 +47,14 @@ class bounded_index_queue_t {
   alignas(128) slot_array_t          m_slots{ };
 
 public:
+  /** queue capacity */
   static constexpr auto CAPACITY = HALF;
+  /** default init arguments */
+  static constexpr auto EMPTY  = queue_init_t{ 0, 0 };
+  static constexpr auto FILLED = queue_init_t{ 0, HALF };
 
   /** constructor */
-  explicit bounded_index_queue_t(std::size_t deq_count = 0, std::size_t enq_count = CAPACITY);
+  explicit bounded_index_queue_t(queue_init_t init);
   ~bounded_index_queue_t() = default;
 
   /** Attempts to enqueue the given index at the queue's back. */
