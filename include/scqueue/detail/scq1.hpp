@@ -86,6 +86,7 @@ bool bounded_index_queue_t<O>::try_dequeue(std::size_t& idx, bool ignore_empty) 
     return false;
   }
 
+  auto attempt = 0;
   while (true) {
     const auto head = this->m_head.fetch_add(1, acq_rel);
     const auto head_cycle = cycle_t{ (head << 1) | (2 * N - 1) };
@@ -93,7 +94,6 @@ bool bounded_index_queue_t<O>::try_dequeue(std::size_t& idx, bool ignore_empty) 
 
     std::uintmax_t entry, entry_new;
     cycle_t entry_cycle;
-    auto attempt = 0;
 
     retry:
     entry = slot.load(acquire);
