@@ -8,7 +8,7 @@
 #include "scqueue/detail/detail.hpp"
 
 namespace scq::cas2 {
-template<typename T, std::size_t O = 16>
+template <typename T, std::size_t O = 16>
 class bounded_queue_t {
   /** size and bit constants */
   static constexpr auto N           = std::size_t{ 1 } << O;
