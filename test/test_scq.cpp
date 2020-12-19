@@ -28,8 +28,8 @@ int main(int argc, const char* argv[]) {
 
 template <typename Q>
 int test_queue() {
-  const auto thread_count = 8;
-  const auto count = 8192;
+  const std::uint64_t thread_count = 16;
+  const std::uint64_t count = 32768;
 
   std::vector<std::vector<int>> thread_elements{};
   thread_elements.reserve(thread_count);
@@ -49,8 +49,8 @@ int test_queue() {
   std::atomic_bool start{ false };
   std::atomic_uint64_t sum{ 0 };
 
-  Q queue{};
-  static_assert(Q::CAPACITY == thread_count * count, "not enough capacity");
+  auto& queue = *(new Q{ });
+  static_assert(Q::CAPACITY == (thread_count * count) / 8, "not enough capacity");
 
   for (auto thread = 0; thread < thread_count; ++thread) {
     // producer thread
@@ -58,19 +58,19 @@ int test_queue() {
       while (!start.load());
 
       for (auto op = 0; op < count; ++op) {
-        queue.try_enqueue(&thread_elements[thread][op]);
+        while (!queue.try_enqueue(&thread_elements[thread][op]));
       }
     });
 
     // consumer thread
     threads.emplace_back([&] {
-      uint64_t thread_sum = 0;
-      uint64_t deq_count = 0;
+      std::uint64_t thread_sum = 0;
+      std::uint64_t deq_count = 0;
 
       while (!start.load()) {}
 
       while (deq_count < count) {
-        int* deq = nullptr;
+        int* deq;
         const auto res = queue.try_dequeue(deq);
         if (res) {
           thread_sum += *deq;

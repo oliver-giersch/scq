@@ -11,8 +11,16 @@ struct cycle_t {
   std::uintmax_t val;
 };
 
-constexpr auto operator<=>(const cycle_t& lhs, const cycle_t& rhs) {
-  return static_cast<std::intmax_t>(lhs.val) - static_cast<std::intmax_t>(rhs.val) <=> 0;
+constexpr auto operator<=(const cycle_t& lhs, const cycle_t& rhs) {
+  return static_cast<std::intmax_t>(lhs.val) - static_cast<std::intmax_t>(rhs.val) <= 0;
+}
+
+constexpr auto operator<(const cycle_t& lhs, const cycle_t& rhs) {
+  return static_cast<std::intmax_t>(lhs.val) - static_cast<std::intmax_t>(rhs.val) < 0;
+}
+
+constexpr auto operator>=(const cycle_t& lhs, const cycle_t& rhs) {
+  return static_cast<std::intmax_t>(lhs.val) - static_cast<std::intmax_t>(rhs.val) >= 0;
 }
 
 template <typename T>
