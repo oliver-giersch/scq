@@ -32,9 +32,12 @@ bool bounded_queue_t<T, O>::try_enqueue(
   }
 
   if (!ignore_full) {
-    // check if the queue is empty
+    // check if the queue is full
     const auto tail = this->m_tail.load(acquire);
     if (tail >= this->m_head.load(acquire) + N) {
+      if constexpr (finalize) {
+        this->m_tail.fetch_or(FINALIZE_BIT, release);
+      }
       return false;
     }
   }
@@ -85,6 +88,7 @@ bool bounded_queue_t<T, O>::try_enqueue(
       }
 
       if (!ignore_full) {
+        // check again if the queue is full
         if (tail + 1 >= this->m_head.load(relaxed) + N) {
           if constexpr (finalize) {
             this->m_tail.fetch_or(FINALIZE_BIT, release);
