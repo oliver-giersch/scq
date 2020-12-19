@@ -10,13 +10,14 @@
 namespace scq::cas2 {
 template<typename T, std::size_t O = 16>
 class bounded_queue_t {
-  static constexpr auto N            = std::size_t{ 1 } << O;
-  static constexpr auto ENQUEUE_BIT  = std::uintmax_t{ 0b01 };
-  static constexpr auto DEQUEUE_BIT  = std::uintmax_t{ 0b10 };
-  static constexpr auto THRESHOLD    = 2 * std::intmax_t{ N } - 1;
-  static constexpr auto FINALIZE_BIT =
+  /** size and bit constants */
+  static constexpr auto N           = std::size_t{ 1 } << O;
+  static constexpr auto ENQUEUE_BIT = std::uintmax_t{ 0b01 };
+  static constexpr auto DEQUEUE_BIT = std::uintmax_t{ 0b10 };
+  static constexpr auto THRESHOLD   = 2 * std::intmax_t{ N } - 1;
+  static constexpr auto FINALIZE    =
       std::uintmax_t{ 1 } << (std::numeric_limits<std::uintmax_t>::digits - 1);
-    /** type aliases */
+  /** type aliases */
   using atomic_pair_t = detail::atomic_pair_t<T>;
   using cycle_t       = detail::cycle_t;
   using pair_t        = detail::pair_t<T>;
@@ -27,6 +28,7 @@ class bounded_queue_t {
   static constexpr auto release = std::memory_order_release;
   static constexpr auto acq_rel = std::memory_order_acq_rel;
 
+  /** Remaps idx to spread consecutive access around in order to avoid false sharing. */
   static constexpr auto cache_remap(std::size_t idx) noexcept {
     return ((idx % N) >> (O - 3)) | ((idx << 3) % N);
   }
@@ -34,13 +36,14 @@ class bounded_queue_t {
   void catchup(std::uintmax_t tail, std::uintmax_t head) noexcept;
 
   alignas(128) std::atomic_uintmax_t m_head{ N };
-  alignas(128) std::atomic_intmax_t  m_threshold{ -1 };
   alignas(128) std::atomic_uintmax_t m_tail{ N };
+  alignas(128) std::atomic_intmax_t  m_threshold{ -1 };
   alignas(128) pair_array_t          m_array{ };
 
 public:
-  using pointer = T*;
+  /** queue capacity */
   static constexpr auto CAPACITY = N;
+  using pointer = T*;
 
   /** constructor */
   bounded_queue_t() noexcept = default;
@@ -83,7 +86,7 @@ public:
   bool try_dequeue(pointer& result, bool ignore_empty = false) noexcept;
 
   /** Resets the threshold. */
-  void reset_threshold(std::memory_order order);
+  void reset_threshold(std::memory_order order) noexcept;
 };
 }
 

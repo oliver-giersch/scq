@@ -15,7 +15,7 @@ class bounded_index_queue_t {
   /** constructor argument type */
   struct queue_init_t {
     std::size_t deq_count, enq_count;
-    [[nodiscard]] bool is_empty() const {
+    [[nodiscard]] auto is_empty() const {
       return this->deq_count == 0 && this->enq_count == 0;
     }
   };
@@ -35,7 +35,8 @@ class bounded_index_queue_t {
   static constexpr auto release = std::memory_order_release;
   static constexpr auto acq_rel = std::memory_order_acq_rel;
 
-  static constexpr std::size_t cache_remap(std::size_t idx) noexcept {
+  /** Remaps idx to spread consecutive access around in order to avoid false sharing. */
+  static constexpr auto cache_remap(std::size_t idx) noexcept {
     return ((idx % N) >> (O - 3)) | ((idx << 4) % N);
   }
 

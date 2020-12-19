@@ -50,21 +50,21 @@ bool bounded_index_queue_t<O>::try_enqueue(std::size_t idx, bool ignore_empty) {
 
     const auto tail_cycle = cycle_t{ (tail << 1) | (2 * N - 1) };
     auto& slot = this->m_slots[cache_remap(tail)];
-    auto tag = slot.load(acquire);
+    auto entry = slot.load(acquire);
 
     while (true) {
-      const auto cycle = cycle_t{ tag | 2 * N - 1 };
+      const auto entry_cycle = cycle_t{ entry | 2 * N - 1 };
       if (
-          cycle < tail_cycle
+          entry_cycle < tail_cycle
           && (
-              tag == cycle.val
+              entry == entry_cycle.val
               || (
-                  (tag == (cycle.val ^ N))
+                  (entry == (entry_cycle.val ^ N))
                   && cycle_t{ this->m_head.load(acquire) } <= cycle_t{ tail }
               )
           )
       ) {
-        if (!slot.compare_exchange_weak(tag, tail_cycle.val ^ enq_idx, acq_rel, acquire)) {
+        if (!slot.compare_exchange_weak(entry, tail_cycle.val ^ enq_idx, acq_rel, acquire)) {
           continue;
         }
 
@@ -91,14 +91,12 @@ bool bounded_index_queue_t<O>::try_dequeue(std::size_t& idx, bool ignore_empty) 
     const auto head_cycle = cycle_t{ (head << 1) | (2 * N - 1) };
     auto& slot = this->m_slots[cache_remap(head)];
 
-    std::uintmax_t entry;
+    std::uintmax_t entry, entry_new;
+    cycle_t entry_cycle;
     auto attempt = 0;
 
     retry:
     entry = slot.load(acquire);
-    uintmax_t entry_new;
-    cycle_t entry_cycle;
-
     do {
       entry_cycle = cycle_t{ entry | (2 * N - 1) };
       if (entry_cycle.val == head_cycle.val) {
@@ -121,7 +119,7 @@ bool bounded_index_queue_t<O>::try_dequeue(std::size_t& idx, bool ignore_empty) 
       }
     } while (
         entry_cycle < head_cycle
-        && slot.compare_exchange_weak(entry, entry_new, acq_rel, acquire)
+        && !slot.compare_exchange_weak(entry, entry_new, acq_rel, acquire)
     );
 
     if (!ignore_empty) {

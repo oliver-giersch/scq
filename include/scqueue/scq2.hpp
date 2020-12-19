@@ -36,7 +36,7 @@ bool bounded_queue_t<T, O>::try_enqueue(
     const auto tail = this->m_tail.load(acquire);
     if (tail >= this->m_head.load(acquire) + N) {
       if constexpr (finalize) {
-        this->m_tail.fetch_or(FINALIZE_BIT, release);
+        this->m_tail.fetch_or(FINALIZE, release);
       }
       return false;
     }
@@ -47,7 +47,7 @@ bool bounded_queue_t<T, O>::try_enqueue(
     const auto tail = this->m_tail.fetch_add(1, acq_rel);
     if constexpr (finalize) {
       // if the ring is finalized, return false
-      if ((tail & FINALIZE_BIT) == FINALIZE_BIT) {
+      if ((tail & FINALIZE) == FINALIZE) {
         return false;
       }
     }
@@ -91,7 +91,7 @@ bool bounded_queue_t<T, O>::try_enqueue(
         // check again if the queue is full
         if (tail + 1 >= this->m_head.load(relaxed) + N) {
           if constexpr (finalize) {
-            this->m_tail.fetch_or(FINALIZE_BIT, release);
+            this->m_tail.fetch_or(FINALIZE, release);
           }
 
           return false;
