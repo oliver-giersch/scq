@@ -156,7 +156,7 @@ bool bounded_queue_t<T, O>::try_dequeue(pointer& result, bool ignore_empty) noex
 }
 
 template<typename T, std::size_t O>
-void bounded_queue_t<T, O>::reset_threshold(std::memory_order order) {
+void bounded_queue_t<T, O>::reset_threshold(std::memory_order order) noexcept {
   this->m_threshold.store(THRESHOLD, order);
 }
 
