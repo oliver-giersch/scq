@@ -115,7 +115,7 @@ bool bounded_index_queue_t<O>::try_dequeue(std::size_t& idx, bool ignore_empty) 
           goto retry;
         }
 
-        entry_new = head_cycle.val ^ ((~entry) & N);
+        entry_new = head_cycle.val ^ (~entry & N);
       }
     } while (
         entry_cycle < head_cycle
