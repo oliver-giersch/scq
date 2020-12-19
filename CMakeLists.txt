@@ -14,3 +14,6 @@ target_link_libraries(test_scq PRIVATE Threads::Threads)
 
 add_executable(test_simple test/test_simple.cpp)
 target_include_directories(test_simple PRIVATE include/)
+
+add_executable(test_simple_scq2 test/test_simple_scq2.cpp)
+target_include_directories(test_simple_scq2 PRIVATE include/)

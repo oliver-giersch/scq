@@ -59,8 +59,8 @@ struct alignas(16) atomic_pair_t {
       const auto next = pair_t {
           curr.tag & pair.tag,
           reinterpret_cast<pointer>(
-              reinterpret_cast<std::uintmax_t>(curr.ptr)
-              & reinterpret_cast<std::uintmax_t>(pair.ptr)
+              reinterpret_cast<std::uintptr_t>(curr.ptr)
+              & reinterpret_cast<std::uintptr_t>(pair.ptr)
           )
       };
 

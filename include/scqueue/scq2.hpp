@@ -22,15 +22,19 @@ bounded_queue_t<T, O>::bounded_queue_t(pointer first) {
 
 template<typename T, std::size_t O>
 template<bool finalize>
-bool bounded_queue_t<T, O>::try_enqueue(pointer elem, bool ignore_empty, bool ignore_full) {
+bool bounded_queue_t<T, O>::try_enqueue(
+    pointer elem,
+    bool ignore_empty,
+    bool ignore_full
+) {
   if (elem == nullptr) {
-    throw std::invalid_argument("elem must not be null");
+    throw std::invalid_argument("`elem` must not be null");
   }
 
   if (!ignore_full) {
     // check if the queue is empty
     const auto tail = this->m_tail.load(acquire);
-    if (tail >= N + this->m_head.load(acquire)) {
+    if (tail >= this->m_head.load(acquire) + N) {
       return false;
     }
   }
@@ -80,10 +84,8 @@ bool bounded_queue_t<T, O>::try_enqueue(pointer elem, bool ignore_empty, bool ig
         return true;
       }
 
-      this->reset_threshold(seq_cst);
-
       if (!ignore_full) {
-        if (tail + 1 >= N + this->m_head.load(relaxed)) {
+        if (tail + 1 >= this->m_head.load(relaxed) + N) {
           if constexpr (finalize) {
             this->m_tail.fetch_or(FINALIZE_BIT, release);
           }
@@ -98,8 +100,8 @@ bool bounded_queue_t<T, O>::try_enqueue(pointer elem, bool ignore_empty, bool ig
 }
 
 template<typename T, std::size_t O>
-bool bounded_queue_t<T, O>::try_dequeue(pointer& result, bool non_empty) noexcept {
-  if (!non_empty && this->m_threshold.load(acquire) < 0) {
+bool bounded_queue_t<T, O>::try_dequeue(pointer& result, bool ignore_empty) noexcept {
+  if (!ignore_empty && this->m_threshold.load(acquire) < 0) {
     return false;
   }
 
@@ -110,18 +112,18 @@ bool bounded_queue_t<T, O>::try_dequeue(pointer& result, bool non_empty) noexcep
     auto& slot = this->m_array[cache_remap(head)];
     auto tag = slot.tag.load(acquire);
 
-    cycle_t enq_cycle;
+    cycle_t tag_cycle;
     std::uintmax_t tag_new;
 
     do {
-      enq_cycle = cycle_t{ tag & ~(N - 1) };
-      if (enq_cycle.val == head_cycle.val) {
+      tag_cycle = cycle_t{ tag & ~(N - 1) };
+      if (tag_cycle.val == head_cycle.val) {
         auto pair = slot.fetch_and(pair_t{ ~ENQUEUE_BIT, nullptr }, acq_rel);
         result = pair.ptr;
         return true;
       }
 
-      if ((tag & ~DEQUEUE_BIT) != enq_cycle.val) {
+      if ((tag & ~DEQUEUE_BIT) != tag_cycle.val) {
         tag_new = tag | DEQUEUE_BIT;
         if (tag == tag_new) {
           break;
@@ -130,14 +132,14 @@ bool bounded_queue_t<T, O>::try_dequeue(pointer& result, bool non_empty) noexcep
         tag_new = head_cycle.val | (tag & DEQUEUE_BIT);
       }
     } while (
-        enq_cycle < head_cycle
+        tag_cycle < head_cycle
         && !slot.tag.compare_exchange_weak(tag, tag_new, acq_rel, acquire)
     );
 
-    if (!non_empty) {
-      const auto tail = cycle_t{ this->m_tail.load(acquire) };
-      if (tail <= cycle_t{ head + 1 }) {
-        this->catchup(tail.val, head + 1);
+    if (!ignore_empty) {
+      const auto tail = this->m_tail.load(acquire);
+      if (cycle_t{ tail } <= cycle_t{ head + 1 }) {
+        this->catchup(tail, head + 1);
         this->m_threshold.fetch_sub(1, acq_rel);
         return false;
       }

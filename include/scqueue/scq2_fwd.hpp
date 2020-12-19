@@ -26,9 +26,8 @@ class bounded_queue_t {
   static constexpr auto acquire = std::memory_order_acquire;
   static constexpr auto release = std::memory_order_release;
   static constexpr auto acq_rel = std::memory_order_acq_rel;
-  static constexpr auto seq_cst = std::memory_order_seq_cst;
 
-  static constexpr std::size_t cache_remap(std::size_t idx) noexcept {
+  static constexpr auto cache_remap(std::size_t idx) noexcept {
     return ((idx % N) >> (O - 3)) | ((idx << 3) % N);
   }
 
@@ -65,18 +64,23 @@ public:
    * @throws `std::invalid_argument` exception, if `elem` is `nullptr`
    */
   template<bool finalize = false>
-  bool try_enqueue(pointer elem, bool ignore_empty = false, bool ignore_full = false);
+  bool try_enqueue(
+      pointer elem,
+      bool ignore_empty = false,
+      bool ignore_full = false
+  );
 
   /**
    * Attempts to dequeue an element from the ring buffer's head position.
    *
-   * @param result the pointer where the dequeued element is written into on success
-   * @param non_empty if true, the procedure will ignore the possibility of the
-   *     queue ever being empty
+   * @param result the pointer where the dequeued element is written into on
+   * success
+   * @param ignore_empty if true, the procedure will ignore the possibility of
+   * the queue ever being empty
    *
    * @return true upon success, false otherwise
    */
-  bool try_dequeue(pointer& result, bool non_empty = false) noexcept;
+  bool try_dequeue(pointer& result, bool ignore_empty = false) noexcept;
 
   /** Resets the threshold. */
   void reset_threshold(std::memory_order order);
