@@ -3,10 +3,24 @@
 
 #include <atomic>
 #include <compare>
+#include <limits>
 
 #include <iostream>
 
 namespace scq::detail {
+template <bool finalize = false>
+struct finalize_bit_t {
+  static constexpr auto bit  = std::uintmax_t{ 0 };
+  static constexpr auto mask = ~bit;
+};
+
+template <>
+struct finalize_bit_t<true> {
+  static constexpr std::uintmax_t bit =
+      std::uintmax_t{ 1 } << (std::numeric_limits<std::uintmax_t>::digits - 1);
+  static constexpr auto mask = ~bit;
+};
+
 struct cycle_t {
   std::uintmax_t val;
 };

@@ -7,8 +7,8 @@
 #include "scq2_fwd.hpp"
 
 namespace scq::cas2 {
-template<typename T, std::size_t O>
-bounded_queue_t<T, O>::bounded_queue_t(pointer first) {
+template<typename T, std::size_t O, bool finalize>
+bounded_queue_t<T, O, finalize>::bounded_queue_t(pointer first) {
   if (first == nullptr) {
     throw std::invalid_argument("elem must not be null");
   }
@@ -20,9 +20,8 @@ bounded_queue_t<T, O>::bounded_queue_t(pointer first) {
   this->reset_threshold(relaxed);
 }
 
-template<typename T, std::size_t O>
-template<bool finalize>
-bool bounded_queue_t<T, O>::try_enqueue(
+template<typename T, std::size_t O, bool finalize>
+bool bounded_queue_t<T, O, finalize>::try_enqueue(
     pointer elem,
     bool ignore_empty,
     bool ignore_full
@@ -36,7 +35,7 @@ bool bounded_queue_t<T, O>::try_enqueue(
     const auto tail = this->m_tail.load(acquire);
     if (tail >= this->m_head.load(acquire) + N) {
       if constexpr (finalize) {
-        this->m_tail.fetch_or(FINALIZE, release);
+        this->m_tail.fetch_or(finalize_bit_t::bit, release);
       }
       return false;
     }
@@ -47,7 +46,7 @@ bool bounded_queue_t<T, O>::try_enqueue(
     const auto tail = this->m_tail.fetch_add(1, acq_rel);
     if constexpr (finalize) {
       // if the ring is finalized, return false
-      if ((tail & FINALIZE) == FINALIZE) {
+      if ((tail & finalize_bit_t::bit) != 0) {
         return false;
       }
     }
@@ -91,7 +90,7 @@ bool bounded_queue_t<T, O>::try_enqueue(
         // check again if the queue is full
         if (tail + 1 >= this->m_head.load(relaxed) + N) {
           if constexpr (finalize) {
-            this->m_tail.fetch_or(FINALIZE, release);
+            this->m_tail.fetch_or(finalize_bit_t::bit, release);
           }
 
           return false;
@@ -103,8 +102,11 @@ bool bounded_queue_t<T, O>::try_enqueue(
   }
 }
 
-template<typename T, std::size_t O>
-bool bounded_queue_t<T, O>::try_dequeue(pointer& result, bool ignore_empty) noexcept {
+template<typename T, std::size_t O, bool finalize>
+bool bounded_queue_t<T, O, finalize>::try_dequeue(
+    pointer& result,
+    bool ignore_empty
+) noexcept {
   if (!ignore_empty && this->m_threshold.load(acquire) < 0) {
     return false;
   }
@@ -142,7 +144,7 @@ bool bounded_queue_t<T, O>::try_dequeue(pointer& result, bool ignore_empty) noex
 
     if (!ignore_empty) {
       const auto tail = this->m_tail.load(acquire);
-      if (cycle_t{ tail } <= cycle_t{ head + 1 }) {
+      if (cycle_t{ tail & finalize_bit_t::mask } <= cycle_t{ head + 1 }) {
         this->catchup(tail, head + 1);
         this->m_threshold.fetch_sub(1, acq_rel);
         return false;
@@ -155,17 +157,23 @@ bool bounded_queue_t<T, O>::try_dequeue(pointer& result, bool ignore_empty) noex
   }
 }
 
-template<typename T, std::size_t O>
-void bounded_queue_t<T, O>::reset_threshold(std::memory_order order) noexcept {
+template<typename T, std::size_t O, bool finalize>
+void bounded_queue_t<T, O, finalize>::reset_threshold(
+    std::memory_order order
+) noexcept {
   this->m_threshold.store(THRESHOLD, order);
 }
 
-template<typename T, std::size_t O>
-void bounded_queue_t<T, O>::catchup(std::uintmax_t tail, std::uintmax_t head) noexcept {
-  while (!this->m_tail.compare_exchange_weak(tail, head, acq_rel, acquire)) {
+template<typename T, std::size_t O, bool finalize>
+void bounded_queue_t<T, O, finalize>::catchup(
+    std::uintmax_t tail,
+    std::uintmax_t head
+) noexcept {
+  const auto finalize_bit = tail & finalize_bit_t::bit;
+  while (!this->m_tail.compare_exchange_weak(tail, head | finalize_bit, acq_rel, acquire)) {
     head = this->m_head.load(acquire);
     tail = this->m_tail.load(acquire);
-    if (cycle_t{ tail } >= cycle_t{ head }) {
+    if (cycle_t{ tail & finalize_bit_t::mask } >= cycle_t{ head }) {
       break;
     }
   }

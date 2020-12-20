@@ -3,25 +3,23 @@
 
 #include <atomic>
 #include <array>
-#include <limits>
 
 #include "scqueue/detail/detail.hpp"
 
 namespace scq::cas2 {
-template <typename T, std::size_t O = 16>
+template <typename T, std::size_t O = 16, bool finalize = false>
 class bounded_queue_t {
   /** size and bit constants */
   static constexpr auto N           = std::size_t{ 1 } << O;
   static constexpr auto ENQUEUE_BIT = std::uintmax_t{ 0b01 };
   static constexpr auto DEQUEUE_BIT = std::uintmax_t{ 0b10 };
   static constexpr auto THRESHOLD   = 2 * std::intmax_t{ N } - 1;
-  static constexpr auto FINALIZE    =
-      std::uintmax_t{ 1 } << (std::numeric_limits<std::uintmax_t>::digits - 1);
   /** type aliases */
-  using atomic_pair_t = detail::atomic_pair_t<T>;
-  using cycle_t       = detail::cycle_t;
-  using pair_t        = detail::pair_t<T>;
-  using pair_array_t  = std::array<atomic_pair_t, N>;
+  using atomic_pair_t  = detail::atomic_pair_t<T>;
+  using cycle_t        = detail::cycle_t;
+  using finalize_bit_t = scq::detail::finalize_bit_t<finalize>;
+  using pair_t         = detail::pair_t<T>;
+  using pair_array_t   = std::array<atomic_pair_t, N>;
   /** memory ordering constants */
   static constexpr auto relaxed = std::memory_order_relaxed;
   static constexpr auto acquire = std::memory_order_acquire;
@@ -66,7 +64,6 @@ public:
    * @return true upon success, false otherwise
    * @throws `std::invalid_argument` exception, if `elem` is `nullptr`
    */
-  template<bool finalize = false>
   bool try_enqueue(
       pointer elem,
       bool ignore_empty = false,

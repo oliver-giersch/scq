@@ -9,7 +9,7 @@
 #include "scqueue/detail/detail.hpp"
 
 namespace scq::cas1 {
-template <std::size_t O = 16>
+template <std::size_t O = 16, bool finalize = false>
 class bounded_index_queue_t {
   static_assert(O >= 2, "order must be greater than 2");
   /** constructor argument type */
@@ -24,11 +24,10 @@ class bounded_index_queue_t {
   static constexpr auto N          = 2 * HALF;
   static constexpr auto THRESHOLD  = 3 * std::intmax_t{ N } - 1;
   static constexpr auto EMPTY_SLOT = std::numeric_limits<std::uintmax_t>::max();
-  static constexpr auto FINALIZE   =
-      std::uintmax_t{ 1 } << (std::numeric_limits<std::uintmax_t>::digits - 1);
   /** type aliases */
-  using cycle_t = scq::detail::cycle_t;
-  using slot_array_t = std::array<std::atomic_uintmax_t, N>;
+  using cycle_t        = scq::detail::cycle_t;
+  using finalize_bit_t = scq::detail::finalize_bit_t<finalize>;
+  using slot_array_t   = std::array<std::atomic_uintmax_t, N>;
   /** memory ordering constants */
   static constexpr auto relaxed = std::memory_order_relaxed;
   static constexpr auto acquire = std::memory_order_acquire;
@@ -59,12 +58,11 @@ public:
   ~bounded_index_queue_t() = default;
 
   /** Attempts to enqueue the given index at the queue's back. */
-  template <bool finalize = false>
   bool try_enqueue(std::size_t idx, bool ignore_empty = false);
   /** Attempts to dequeue the index at the queue's front. */
   bool try_dequeue(std::size_t& idx, bool ignore_empty = false) noexcept;
   /** Finalizes the queue, closing it for further enqueues. */
-  void finalize_queue() noexcept;
+  void finalize_queue() noexcept requires finalize;
   /** Resets the threshold value. */
   void reset_threshold(std::memory_order order) noexcept;
 };

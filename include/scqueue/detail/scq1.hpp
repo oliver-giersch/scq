@@ -8,8 +8,8 @@
 using namespace std;
 
 namespace scq::cas1 {
-template <std::size_t O>
-bounded_index_queue_t<O>::bounded_index_queue_t(queue_init_t init) :
+template <std::size_t O, bool finalize>
+bounded_index_queue_t<O, finalize>::bounded_index_queue_t(queue_init_t init) :
     m_head{ init.deq_count },
     m_tail{ init.enq_count },
     m_threshold{ init.is_empty() ? -1 : THRESHOLD }
@@ -32,9 +32,11 @@ bounded_index_queue_t<O>::bounded_index_queue_t(queue_init_t init) :
   }
 }
 
-template <std::size_t O>
-template <bool finalize>
-bool bounded_index_queue_t<O>::try_enqueue(std::size_t idx, bool ignore_empty) {
+template <std::size_t O, bool finalize>
+bool bounded_index_queue_t<O, finalize>::try_enqueue(
+    std::size_t idx,
+    bool ignore_empty
+) {
   if (idx >= CAPACITY) [[unlikely]] {
     throw std::invalid_argument("idx must not be greater than capacity");
   }
@@ -43,7 +45,7 @@ bool bounded_index_queue_t<O>::try_enqueue(std::size_t idx, bool ignore_empty) {
   while (true) {
     const auto tail = this->m_tail.fetch_add(1, acq_rel);
     if constexpr (finalize) {
-      if ((tail & FINALIZE) == FINALIZE) [[unlikely]] {
+      if ((tail & finalize_bit_t::bit) != 0) [[unlikely]] {
         return false;
       }
     }
@@ -80,8 +82,11 @@ bool bounded_index_queue_t<O>::try_enqueue(std::size_t idx, bool ignore_empty) {
   }
 }
 
-template <std::size_t O>
-bool bounded_index_queue_t<O>::try_dequeue(std::size_t& idx, bool ignore_empty) noexcept {
+template <std::size_t O, bool finalize>
+bool bounded_index_queue_t<O, finalize>::try_dequeue(
+    std::size_t& idx,
+    bool ignore_empty
+) noexcept {
   if (!ignore_empty && this->m_threshold.load(acquire) < 0) {
     return false;
   }
@@ -124,7 +129,7 @@ bool bounded_index_queue_t<O>::try_dequeue(std::size_t& idx, bool ignore_empty) 
 
     if (!ignore_empty) {
       const auto tail = this->m_tail.load(acquire);
-      if (cycle_t{ tail } <= cycle_t{ head + 1 }) {
+      if (cycle_t{ tail & finalize_bit_t::mask } <= cycle_t{ head + 1 }) {
         this->catchup(tail, head + 1);
         this->m_threshold.fetch_sub(1, acq_rel);
         return false;
@@ -137,23 +142,28 @@ bool bounded_index_queue_t<O>::try_dequeue(std::size_t& idx, bool ignore_empty) 
   }
 }
 
-template <std::size_t O>
-void bounded_index_queue_t<O>::finalize_queue() noexcept {
-  this->m_tail.fetch_or(FINALIZE, release);
+template <std::size_t O, bool finalize>
+void bounded_index_queue_t<O, finalize>::finalize_queue() noexcept
+  requires finalize
+{
+  this->m_tail.fetch_or(finalize_bit_t::bit, release);
 }
 
-template <std::size_t O>
-void bounded_index_queue_t<O>::reset_threshold(std::memory_order order) noexcept {
+template <std::size_t O, bool finalize>
+void bounded_index_queue_t<O, finalize>::reset_threshold(
+    std::memory_order order
+) noexcept {
   this->m_threshold.store(THRESHOLD, order);
 }
 
-template <std::size_t O>
-void bounded_index_queue_t<O>::catchup(uint64_t tail, uint64_t head) noexcept {
-  while (!this->m_tail.compare_exchange_weak(tail, head, acq_rel, acquire)) {
+template <std::size_t O, bool finalize>
+void bounded_index_queue_t<O, finalize>::catchup(uint64_t tail, uint64_t head) noexcept {
+  const auto finalize_bit = tail & finalize_bit_t::bit;
+  while (!this->m_tail.compare_exchange_weak(tail, head | finalize_bit, acq_rel, acquire)) {
     head = this->m_head.load(acquire);
     tail = this->m_tail.load(acquire);
 
-    if (cycle_t{ tail } >= cycle_t{ head }) {
+    if (cycle_t{ tail & finalize_bit_t::mask } >= cycle_t{ head }) {
       break;
     }
   }
