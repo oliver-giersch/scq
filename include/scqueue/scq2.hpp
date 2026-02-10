@@ -21,7 +21,8 @@ bounded_queue_t<T, O, finalize>::bounded_queue_t(pointer first) {
 }
 
 template<typename T, std::size_t O, bool finalize>
-bool bounded_queue_t<T, O, finalize>::try_enqueue(
+bool
+bounded_queue_t<T, O, finalize>::try_enqueue(
     pointer elem,
     bool ignore_empty,
     bool ignore_full
@@ -103,7 +104,8 @@ bool bounded_queue_t<T, O, finalize>::try_enqueue(
 }
 
 template<typename T, std::size_t O, bool finalize>
-bool bounded_queue_t<T, O, finalize>::try_dequeue(
+bool
+bounded_queue_t<T, O, finalize>::try_dequeue(
     pointer& result,
     bool ignore_empty
 ) noexcept {
@@ -158,14 +160,16 @@ bool bounded_queue_t<T, O, finalize>::try_dequeue(
 }
 
 template<typename T, std::size_t O, bool finalize>
-void bounded_queue_t<T, O, finalize>::reset_threshold(
+void
+bounded_queue_t<T, O, finalize>::reset_threshold(
     std::memory_order order
 ) noexcept {
   this->m_threshold.store(THRESHOLD, order);
 }
 
 template<typename T, std::size_t O, bool finalize>
-void bounded_queue_t<T, O, finalize>::catchup(
+void
+bounded_queue_t<T, O, finalize>::catchup(
     std::uintmax_t tail,
     std::uintmax_t head
 ) noexcept {
@@ -181,3 +185,4 @@ void bounded_queue_t<T, O, finalize>::catchup(
 }
 
 #endif /* SCQ2_HPP */
+

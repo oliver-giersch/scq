@@ -33,7 +33,8 @@ bounded_index_queue_t<O, finalize>::bounded_index_queue_t(queue_init_t init) :
 }
 
 template <std::size_t O, bool finalize>
-bool bounded_index_queue_t<O, finalize>::try_enqueue(
+bool
+bounded_index_queue_t<O, finalize>::try_enqueue(
     std::size_t idx,
     bool ignore_empty
 ) {
@@ -83,7 +84,8 @@ bool bounded_index_queue_t<O, finalize>::try_enqueue(
 }
 
 template <std::size_t O, bool finalize>
-bool bounded_index_queue_t<O, finalize>::try_dequeue(
+bool
+bounded_index_queue_t<O, finalize>::try_dequeue(
     std::size_t& idx,
     bool ignore_empty
 ) noexcept {
@@ -100,7 +102,7 @@ bool bounded_index_queue_t<O, finalize>::try_dequeue(
     std::uintmax_t entry, entry_new;
     cycle_t entry_cycle;
 
-    retry:
+retry:
     entry = slot.load(acquire);
     do {
       entry_cycle = cycle_t{ entry | (2 * N - 1) };
@@ -143,21 +145,24 @@ bool bounded_index_queue_t<O, finalize>::try_dequeue(
 }
 
 template <std::size_t O, bool finalize>
-void bounded_index_queue_t<O, finalize>::finalize_queue() noexcept
+void
+bounded_index_queue_t<O, finalize>::finalize_queue() noexcept
   requires finalize
 {
   this->m_tail.fetch_or(finalize_bit_t::bit, release);
 }
 
 template <std::size_t O, bool finalize>
-void bounded_index_queue_t<O, finalize>::reset_threshold(
+void
+bounded_index_queue_t<O, finalize>::reset_threshold(
     std::memory_order order
 ) noexcept {
   this->m_threshold.store(THRESHOLD, order);
 }
 
 template <std::size_t O, bool finalize>
-void bounded_index_queue_t<O, finalize>::catchup(uint64_t tail, uint64_t head) noexcept {
+void
+bounded_index_queue_t<O, finalize>::catchup(std::uintmax_t tail, std::uintmax_t head) noexcept {
   const auto finalize_bit = tail & finalize_bit_t::bit;
   while (!this->m_tail.compare_exchange_weak(tail, head | finalize_bit, acq_rel, acquire)) {
     head = this->m_head.load(acquire);
@@ -171,3 +176,4 @@ void bounded_index_queue_t<O, finalize>::catchup(uint64_t tail, uint64_t head) n
 }
 
 #endif /* SCQ1_HPP */
+

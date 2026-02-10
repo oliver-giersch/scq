@@ -11,7 +11,8 @@
 namespace scq::cas1 {
 template <std::size_t O = 16, bool finalize = false>
 class bounded_index_queue_t {
-  static_assert(O >= 2, "order must be greater than 2");
+  static_assert(O > 2, "order must be greater than 2");
+
   /** constructor argument type */
   struct queue_init_t {
     std::size_t deq_count, enq_count;
@@ -19,15 +20,18 @@ class bounded_index_queue_t {
       return this->deq_count == 0 && this->enq_count == 0;
     }
   };
+
   /** size and bit constants */
   static constexpr auto HALF       = std::size_t{ 1 } << O;
   static constexpr auto N          = 2 * HALF;
   static constexpr auto THRESHOLD  = 3 * std::intmax_t{ N } - 1;
   static constexpr auto EMPTY_SLOT = std::numeric_limits<std::uintmax_t>::max();
+
   /** type aliases */
   using cycle_t        = scq::detail::cycle_t;
   using finalize_bit_t = scq::detail::finalize_bit_t<finalize>;
   using slot_array_t   = std::array<std::atomic_uintmax_t, N>;
+
   /** memory ordering constants */
   static constexpr auto relaxed = std::memory_order_relaxed;
   static constexpr auto acquire = std::memory_order_acquire;
@@ -35,7 +39,8 @@ class bounded_index_queue_t {
   static constexpr auto acq_rel = std::memory_order_acq_rel;
 
   /** Remaps idx to spread consecutive access around in order to avoid false sharing. */
-  static constexpr auto cache_remap(std::size_t idx) noexcept {
+  static constexpr auto
+  cache_remap(std::size_t idx) noexcept {
     return ((idx % N) >> (O - 3)) | ((idx << 4) % N);
   }
 
@@ -69,3 +74,4 @@ public:
 }
 
 #endif /* SCQ1_FWD_HPP */
+

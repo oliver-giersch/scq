@@ -13,6 +13,7 @@ class bounded_queue_t {
 public:
   using pointer = T*;
   static constexpr auto CAPACITY = std::size_t{ 1 } << O;
+
 private:
   template <bool _finalize>
   using index_queue_t = ::scq::cas1::bounded_index_queue_t<O, _finalize>;
@@ -40,3 +41,4 @@ public:
 }
 
 #endif /* SCQD_FWD_HPP */
+

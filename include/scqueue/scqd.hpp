@@ -22,7 +22,8 @@ bounded_queue_t<T, O, finalize>::bounded_queue_t(pointer first) :
 }
 
 template <typename T, std::size_t O, bool finalize>
-bool bounded_queue_t<T, O, finalize>::try_enqueue(pointer elem, bool ignore_empty) {
+bool
+bounded_queue_t<T, O, finalize>::try_enqueue(pointer elem, bool ignore_empty) {
   std::size_t enqueue_idx;
   if (!this->m_fq.try_dequeue(enqueue_idx, ignore_empty)) {
     if constexpr (finalize) {
@@ -46,7 +47,8 @@ bool bounded_queue_t<T, O, finalize>::try_enqueue(pointer elem, bool ignore_empt
 }
 
 template <typename T, std::size_t O, bool finalize>
-bool bounded_queue_t<T, O, finalize>::try_dequeue(pointer& result, bool ignore_empty) {
+bool
+bounded_queue_t<T, O, finalize>::try_dequeue(pointer& result, bool ignore_empty) {
   std::uintmax_t dequeue_idx;
   if (!this->m_aq.try_dequeue(dequeue_idx)) {
     return false;
@@ -59,9 +61,11 @@ bool bounded_queue_t<T, O, finalize>::try_dequeue(pointer& result, bool ignore_e
 }
 
 template <typename T, std::size_t O, bool finalize>
-void bounded_queue_t<T, O, finalize>::reset_threshold(std::memory_order order) {
+void
+bounded_queue_t<T, O, finalize>::reset_threshold(std::memory_order order) {
   this->m_aq.reset_threshold(order);
 }
 }
 
 #endif /* SCQD_HPP */
+

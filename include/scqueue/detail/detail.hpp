@@ -25,15 +25,18 @@ struct cycle_t {
   std::uintmax_t val;
 };
 
-constexpr auto operator<=(const cycle_t& lhs, const cycle_t& rhs) {
+constexpr auto
+operator<=(const cycle_t& lhs, const cycle_t& rhs) {
   return static_cast<std::intmax_t>(lhs.val) - static_cast<std::intmax_t>(rhs.val) <= 0;
 }
 
-constexpr auto operator<(const cycle_t& lhs, const cycle_t& rhs) {
+constexpr auto
+operator<(const cycle_t& lhs, const cycle_t& rhs) {
   return static_cast<std::intmax_t>(lhs.val) - static_cast<std::intmax_t>(rhs.val) < 0;
 }
 
-constexpr auto operator>=(const cycle_t& lhs, const cycle_t& rhs) {
+constexpr auto
+operator>=(const cycle_t& lhs, const cycle_t& rhs) {
   return static_cast<std::intmax_t>(lhs.val) - static_cast<std::intmax_t>(rhs.val) >= 0;
 }
 
@@ -52,7 +55,8 @@ struct alignas(16) atomic_pair_t {
   std::atomic<std::uintmax_t> tag{ 0 };
   std::atomic<pointer>        ptr{ nullptr };
 
-  bool compare_exchange_weak(
+  bool
+  compare_exchange_weak(
       pair_t<T>& expected,
       pair_t<T>  desired,
       std::memory_order success,
@@ -71,7 +75,8 @@ struct alignas(16) atomic_pair_t {
     return res != 0;
   }
 
-  pair_t<T> fetch_and(pair_t<T> pair, std::memory_order order) {
+  pair_t<T>
+  fetch_and(pair_t<T> pair, std::memory_order order) {
     auto curr = pair_t {
       this->tag.load(std::memory_order_relaxed),
       this->ptr.load(std::memory_order_relaxed)
@@ -95,3 +100,4 @@ struct alignas(16) atomic_pair_t {
 }
 
 #endif /* SCQ_DETAIL_HPP */
+

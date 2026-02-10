@@ -1,3 +1,5 @@
 /.idea
 /cmake-build-debug/
 /cmake-build-release/
+test_scq
+test_simple_scq2

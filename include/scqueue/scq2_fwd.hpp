@@ -14,12 +14,14 @@ class bounded_queue_t {
   static constexpr auto ENQUEUE_BIT = std::uintmax_t{ 0b01 };
   static constexpr auto DEQUEUE_BIT = std::uintmax_t{ 0b10 };
   static constexpr auto THRESHOLD   = 2 * std::intmax_t{ N } - 1;
+
   /** type aliases */
   using atomic_pair_t  = detail::atomic_pair_t<T>;
   using cycle_t        = detail::cycle_t;
   using finalize_bit_t = scq::detail::finalize_bit_t<finalize>;
   using pair_t         = detail::pair_t<T>;
   using pair_array_t   = std::array<atomic_pair_t, N>;
+
   /** memory ordering constants */
   static constexpr auto relaxed = std::memory_order_relaxed;
   static constexpr auto acquire = std::memory_order_acquire;
@@ -88,3 +90,4 @@ public:
 }
 
 #endif /* SCQ_FWD_HPP */
+
